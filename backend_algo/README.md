@@ -16,6 +16,11 @@ pip install -r requirements.txt
 
 ## 启动
 
+向量数据库：
+```shell
+chroma run --path ./data_vector_db --host localhost --port 8002
+```
+
 启动：
 ```shell
 uvicorn main:app --port 8001
