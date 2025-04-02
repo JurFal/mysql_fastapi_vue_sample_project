@@ -50,12 +50,39 @@ interface UserList {
     users: User[]
 }
 
+interface Message {
+    role: string
+    content: string
+}
+
 interface LLMRequest {
-    prompt: string
+    messages: Message[]
+}
+
+interface Choice {
+  index: number
+  message: {
+    role: string
+    content: string
+  }
+  finish_reason: string
+}
+
+interface Usage {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
 }
 
 interface LLMResponse {
-    response: string
+  id: string
+  object: string
+  created: number
+  model: string
+  system_fingerprint: string
+  choices: Choice[]
+  usage: Usage
+  response?: string // 保留原有字段以兼容现有代码
 }
 
 //测试hello api
@@ -82,4 +109,4 @@ export const GetUserInfoList = (params: { skip: number, limit: number }): Promis
     instance.get(`/api/users/`, {params});
 
 export const ChatWithLLM = (data: LLMRequest): Promise<LLMResponse> =>
-    instance.post(`/api/chat`, data);
+    instance.post(`/api/chat/`, data);

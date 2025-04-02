@@ -7,8 +7,8 @@ import requests
 app = FastAPI()
 
 
-URL = 'http://[HOST]:[PORT]/v1'
-MODEL = '[MODEL]'
+URL = 'http://10.176.64.152:11434/v1'
+MODEL = 'qwen2.5:7b'
 
 
 @app.post("/chat/stream/")

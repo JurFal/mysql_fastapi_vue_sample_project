@@ -19,9 +19,14 @@ const submitForm = (formEl: FormInstance | undefined) => {
     if (valid) {
       try {
         let res = await ChatWithLLM({
-          prompt: chatForm.prompt
+          messages: [
+            {
+              role: "user",
+              content: "随便聊聊：" + chatForm.prompt
+            }
+          ]
         })
-        chatForm.response = res.response
+        chatForm.response = res.choices[0].message.content
       } catch (e) {
         console.log(e)
       }

@@ -7,6 +7,7 @@ import CheckUserInfo from "@/components/CheckUserInfo.vue";
 import Profile from "@/components/Profile.vue";
 import AddUser from "@/components/AddUser.vue";
 import Chat from "@/components/Chat.vue";
+import Writing from "@/components/Writing.vue";
 import Register from "@/pages/Register.vue";
 
 const routes =
@@ -48,6 +49,10 @@ const routes =
                 {
                     path: 'chat',
                     component: Chat,
+                },
+                {
+                    path: 'writing',
+                    component: Writing,
                 },
             ]
 
