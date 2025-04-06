@@ -32,6 +32,13 @@ export default defineConfig({
                 /** 是否允许跨域 */
                 changeOrigin: true,  // 是否改变域
                 rewrite: (path) => path.replace(/^\/api/, ''),
+            },
+            "/users_api/": {
+                target: "http://127.0.0.1:8000",
+                ws: true,
+                /** 是否允许跨域 */
+                changeOrigin: true,  // 是否改变域
+                rewrite: (path) => path.replace(/^\/users_api/, ''),
             }
         },
     }

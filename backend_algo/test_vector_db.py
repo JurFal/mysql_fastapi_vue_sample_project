@@ -3,7 +3,7 @@ import chromadb.utils.embedding_functions as embedding_functions
 
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
     api_key="API_KEY_IS_NOT_NEEDED",
-    api_base="http://[HOST]:[PORT]/v1",
+    api_base="http://10.176.64.152:11435/v1",
     model_name="bge-m3"
 )
 

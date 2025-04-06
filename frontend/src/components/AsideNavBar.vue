@@ -4,6 +4,7 @@ import {
   Document,
   Menu as IconMenu,
   Setting,
+  EditPen
 } from '@element-plus/icons-vue'
 import {useRouter} from 'vue-router'
 const router = useRouter()
@@ -45,7 +46,7 @@ function change(key: string, keyPath: string[]) {
     </el-menu-item>
     <el-menu-item index="/index/writing">
       <el-icon>
-        <ChatDotRound/>
+        <EditPen/>
       </el-icon>
       <span>写作助手</span>
     </el-menu-item>

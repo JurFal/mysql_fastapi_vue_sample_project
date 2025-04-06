@@ -1,9 +1,8 @@
 import requests
 import json
 
-URL = "http://[HOST]:[PORT]/v1/rerank"
+URL = "http://10.176.64.152:11436/v1/rerank"
 MODEL = "bge-reranker-v2-m3"
-
 response = requests.post(URL, json={
     "model": MODEL,
     "query": "What is the capital of France?",

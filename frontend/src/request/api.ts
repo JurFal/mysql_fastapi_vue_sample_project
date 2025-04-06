@@ -87,26 +87,26 @@ interface LLMResponse {
 
 //测试hello api
 export const TestHello = (): Res<null> =>
-    instance.get('/api/hello');
+    instance.get('/users_api/hello');
 
 //登录 api
 export const LoginApi = (data: ReqLogin): Promise<ResLogin> =>
-    loginInstance.post('/api/token', data);
+    loginInstance.post('/users_api/token', data);
 
 //注册 api
 export const RegisterApi = (data: ReqRegister): Promise<User> =>
-    instance.post('/api/users/', data);
+    instance.post('/users_api/users/', data);
 
 //登出 api
 export const LogoutApi = (): Res<null> =>
-    instance.get('/api/logout');
+    instance.get('/users_api/logout');
 
 //根据username查询用户信息api  get
 export const GetUserInfoByUserName = (params: { userName: string }): Promise<User> =>
-    instance.get(`/api/users/name/${params.userName}`);
+    instance.get(`/users_api/users/name/${params.userName}`);
 
 export const GetUserInfoList = (params: { skip: number, limit: number }): Promise<UserList> =>
-    instance.get(`/api/users/`, {params});
+    instance.get(`/users_api/users/`, {params});
 
 export const ChatWithLLM = (data: LLMRequest): Promise<LLMResponse> =>
     instance.post(`/api/chat/`, data);
