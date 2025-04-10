@@ -254,6 +254,33 @@ async def delete_user_by_username(
     return None
 
 
+@app.put("/users/name/{username}", response_model=schemas.User)
+async def update_user_by_username(
+        current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+        username: str,
+        user_update: schemas.UserUpdate,
+        db: SessionDep
+):
+    # 可以添加权限检查，例如只允许管理员或用户自己更新
+    # if not current_user.is_admin and current_user.username != username:
+    #    raise HTTPException(
+    #        status_code=status.HTTP_403_FORBIDDEN,
+    #        detail="没有足够权限执行此操作"
+    #    )
+    
+    # 检查用户是否存在
+    db_user = crud.get_user_by_username(db, username=username)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 更新用户信息
+    updated_user = crud.update_user_by_username(db, username=username, user_update=user_update)
+    if updated_user is None:
+        raise HTTPException(status_code=500, detail="更新用户信息失败")
+    
+    return updated_user
+
+
 @app.post("/chat", response_model=schemas.ChatResponse)
 async def chat(
         current_user: Annotated[schemas.User, Depends(get_current_active_user)],
@@ -273,4 +300,28 @@ async def chat(
 
 # 注册代理路由
 app.include_router(proxy_router, prefix="/proxy")
+
+
+@app.post("/verify-password", response_model=schemas.VerifyPasswordResponse)
+async def verify_password_endpoint(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    verify_request: schemas.VerifyPasswordRequest,
+    db: SessionDep
+):
+    # 只允许验证自己的密码
+    # if current_user.username != verify_request.username:
+    #    raise HTTPException(
+    #        status_code=status.HTTP_403_FORBIDDEN,
+    #        detail="只能验证自己的密码"
+    #    )
+    
+    # 验证密码
+    user = authenticate_user(db, verify_request.username, verify_request.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="密码验证失败"
+        )
+    
+    return schemas.VerifyPasswordResponse(success=True)
 

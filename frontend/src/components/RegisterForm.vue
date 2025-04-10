@@ -17,6 +17,40 @@ const registerForm = reactive({
   avatar:'',
 })
 
+// 重新定义验证函数
+const checkUserName = (rule: any, value: any, callback: any) => {
+  if (value === '') {
+    return callback(new Error('请输入用户名'))
+  } else {
+    callback()
+  }
+}
+
+const checkPassword = (rule: any, value: any, callback: any) => {
+  if (value === '') {
+    callback(new Error('请输入密码'))
+  } else {
+    callback()
+  }
+}
+
+const rules = reactive<FormRules<typeof registerForm>>({
+  userName: [{required: true, validator: checkUserName, trigger: 'blur'}],
+  password: [{required: true, validator: checkPassword, trigger: 'blur'}],
+  // 添加邮箱验证规则
+  email: [
+    { required: true, message: '请输入邮箱地址', trigger: 'blur' },
+    { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
+  ],
+  // 添加姓名验证规则
+  first_name: [
+    { required: true, message: '请输入名', trigger: 'blur' }
+  ],
+  last_name: [
+    { required: true, message: '请输入姓', trigger: 'blur' }
+  ],
+})
+
 const submitForm = (formEl: FormInstance | undefined) => {
   if (!formEl) return
   formEl.validate(async (valid) => {
@@ -54,6 +88,7 @@ function jumpToLogin() {
   <el-form
       ref="ruleFormRef"
       :model="registerForm"
+      :rules="rules"
       style="max-width: 600px"
       label-width="auto"
       class="demo-ruleForm"

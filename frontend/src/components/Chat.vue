@@ -3,12 +3,36 @@ import {reactive, ref, nextTick, watch, onMounted, onUnmounted} from 'vue'
 import type {FormInstance, FormRules} from 'element-plus'
 import {useRouter} from 'vue-router'
 import {ElMessage} from 'element-plus'
-import {ChatWithLLM} from "@/request/api";
+import {ChatWithLLM, GetUserInfoByUserName} from "@/request/api";
 import {useUserstore} from '@/store/user'
 
 const router = useRouter()
 const userStore = useUserstore()
 const ruleFormRef = ref<FormInstance>()
+
+// 添加用户头像
+const userAvatar = ref('');
+
+// 获取用户头像
+const fetchUserAvatar = async () => {
+  try {
+    if (userStore.userName) {
+      const userInfo = await GetUserInfoByUserName({ userName: userStore.userName });
+      userAvatar.value = userInfo.avatar || '';
+    }
+  } catch (e) {
+    console.error('获取用户头像失败:', e);
+  }
+};
+
+// 在组件挂载时获取用户头像
+onMounted(() => {
+  loadChatHistory();
+  fetchUserAvatar();
+});
+
+// AI 头像 URL
+const aiAvatar = 'https://img.alicdn.com/imgextra/i4/O1CN01EfJVFQ1uZPd7W4W6i_!!6000000006051-2-tps-112-112.png';
 
 const chatForm = reactive({
   prompt: '',
@@ -243,10 +267,17 @@ const scrollToBottom = () => {
     <div class="chat-history" v-if="chatHistory.length > 0">
       <div v-for="(message, index) in chatHistory" :key="index" 
            :class="['message', message.role === 'user' ? 'user-message' : 'assistant-message']">
-        <div class="message-header">{{ message.role === 'user' ? '我' : 'AI助手' }}</div>
-        <div class="message-content">
-          {{ message.content }}
-          <span v-if="isTyping && index === chatHistory.length - 1 && message.role === 'assistant'" class="typing-cursor">|</span>
+        <div class="message-avatar">
+          <img :src="message.role === 'user' ? userAvatar : aiAvatar" 
+               :alt="message.role === 'user' ? '用户头像' : 'AI头像'" 
+               class="avatar-img" />
+        </div>
+        <div class="message-bubble">
+          <div class="message-header">{{ message.role === 'user' ? '我' : 'AI助手' }}</div>
+          <div class="message-content">
+            {{ message.content }}
+            <span v-if="isTyping && index === chatHistory.length - 1 && message.role === 'assistant'" class="typing-cursor">|</span>
+          </div>
         </div>
       </div>
     </div>
@@ -292,19 +323,38 @@ const scrollToBottom = () => {
 }
 
 .message {
+  display: flex;
   margin-bottom: 15px;
+  align-items: flex-start;
+}
+
+.message-avatar {
+  flex-shrink: 0;
+  margin-right: 10px;
+}
+
+.avatar-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.message-bubble {
+  flex-grow: 1;
   padding: 10px;
   border-radius: 8px;
 }
 
-.user-message {
+.user-message .message-bubble {
   background-color: #e6f7ff;
-  margin-left: 20px;
+  margin-left: 0;
 }
 
-.assistant-message {
+.assistant-message .message-bubble {
   background-color: #f6ffed;
-  margin-right: 20px;
+  margin-right: 0;
 }
 
 .message-header {

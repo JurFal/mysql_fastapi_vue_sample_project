@@ -8,8 +8,11 @@ import Profile from "@/components/Profile.vue";
 import AddUser from "@/components/AddUser.vue";
 import Chat from "@/components/Chat.vue";
 import Writing from "@/components/Writing.vue";
+import ModifyProfile from "@/components/ModifyProfile.vue";
 import Register from "@/pages/Register.vue";
 import {useUserstore} from "@/store/user";
+// 导入 Element Plus 的消息提示
+import { ElMessage } from 'element-plus';
 
 const routes =
     [
@@ -50,7 +53,7 @@ const routes =
                 },
                 {
                     path: 'modifyProfile',
-                    component: AddUser,
+                    component: ModifyProfile,
                 },
                 {
                     path: 'chat',
@@ -81,7 +84,11 @@ router.beforeEach((to, from, next) => {
   
   // 检查该路由是否需要登录
   if (to.matched.some(record => record.meta.requiresAuth)) {
-    if (!userStore.token) {
+    // 使用 isLoggedIn 方法替代简单的 token 检查
+    if (!userStore.token || !userStore.isLoggedIn()) {
+      // 显示提示消息
+      ElMessage.warning('请登录')
+      
       next({
         path: '/',
       })

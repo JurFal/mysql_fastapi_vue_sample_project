@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import schemas
@@ -13,9 +13,14 @@ import chromadb
 import chromadb.utils.embedding_functions as embedding_functions
 from langchain_community.vectorstores import Chroma
 # 假设您已经有了向量数据库的配置
+# 导入pdf_to_vectordb模块中的函数
+import pdf_to_vectordb
+import asyncio
+import threading
+import shutil
+from pathlib import Path
 
-
-
+# 配置OpenAI embedding函数
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
     api_key="API_KEY_IS_NOT_NEEDED",
     api_base="http://10.176.64.152:11435/v1",
@@ -38,6 +43,65 @@ os.makedirs("static/output", exist_ok=True)
 # 挂载静态文件目录
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+
+# 在FastAPI启动时自动加载PDF到向量数据库
+
+@app.on_event("startup")
+async def startup_db_client():
+    # 使用线程运行PDF处理，避免阻塞FastAPI启动
+    def load_pdfs():
+        print("开始加载PDF文件到向量数据库...")
+        # 获取当前脚本所在目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 指定PDF文件所在目录
+        pdf_directory = os.path.join(current_dir, "papers")
+        
+        # 确保目录存在
+        if not os.path.exists(pdf_directory):
+            os.makedirs(pdf_directory)
+            print(f"创建目录: {pdf_directory}")
+        
+        # 处理目录中的所有PDF文件
+        pdf_to_vectordb.process_pdf_directory(pdf_directory)
+        print("PDF文件加载完成！")
+    
+    # 在后台线程中运行，不阻塞FastAPI启动
+    thread = threading.Thread(target=load_pdfs)
+    thread.daemon = True  # 设置为守护线程，当主程序退出时，线程也会退出
+    thread.start()
+
+
+# 在现有代码中添加以下端点
+
+@app.post("/clear_vectordb")
+async def clear_vectordb():
+    try:
+        print("正在清空向量数据库...")
+        # 连接到向量数据库
+        client = chromadb.HttpClient(host='localhost', port=8002)
+        
+        try:
+            # 尝试获取collection
+            collection = client.get_collection(name="papers_collection")
+            
+            # 获取所有文档的ID
+            results = collection.get()
+            if results and "ids" in results and results["ids"]:
+                # 删除所有文档
+                collection.delete(ids=results["ids"])
+                print(f"已清空向量数据库中的papers_collection，删除了{len(results['ids'])}个文档")
+            else:
+                print("向量数据库中没有文档需要删除")
+                
+            return {"status": "success", "message": "向量数据库已清空"}
+        except Exception as e:
+            print(f"清空向量数据库时出错: {str(e)}")
+            return {"status": "error", "message": f"清空向量数据库时出错: {str(e)}"}
+            
+    except Exception as e:
+        print(f"连接向量数据库时出错: {str(e)}")
+        return {"status": "error", "message": f"连接向量数据库时出错: {str(e)}"}
 
 @app.post("/chat/stream/")
 async def chat_stream(conversation: schemas.Conversation):
@@ -330,4 +394,66 @@ async def generate_latex_output(request: schemas.LatexOutputRequest):
         tex_content=latex_content,
         pdf_url=pdf_url
     )
+
+# 添加PDF上传接口
+@app.post("/papers/upload/")
+async def upload_paper(file: UploadFile = File(...)):
+    # 检查文件类型
+    if not file.filename.lower().endswith('.pdf'):
+        return {"status": "error", "message": "只支持上传PDF格式的文件"}
+    
+    try:
+        # 获取当前脚本所在目录
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 指定PDF文件保存目录
+        pdf_directory = os.path.join(current_dir, "papers")
+        
+        # 确保目录存在
+        if not os.path.exists(pdf_directory):
+            os.makedirs(pdf_directory)
+            print(f"创建目录: {pdf_directory}")
+        
+        # 使用原始文件名
+        file_path = os.path.join(pdf_directory, file.filename)
+        
+        # 如果文件已存在，添加数字后缀
+        if os.path.exists(file_path):
+            filename_base, file_extension = os.path.splitext(file.filename)
+            counter = 1
+            while os.path.exists(file_path):
+                new_filename = f"{filename_base}_{counter}{file_extension}"
+                file_path = os.path.join(pdf_directory, new_filename)
+                counter += 1
+            print(f"文件已存在，重命名为: {os.path.basename(file_path)}")
+        
+        # 保存上传的文件
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        print(f"文件已保存到: {file_path}")
+        
+        # 处理PDF文件并添加到向量数据库
+        try:
+            # 使用pdf_to_vectordb模块处理单个PDF文件
+            pdf_to_vectordb.add_pdf_to_vectordb(file_path)
+            print(f"文件已成功添加到向量数据库: {file.filename}")
+            
+            # 尝试提取PDF标题作为返回信息
+            title = Path(file.filename).stem  # 默认使用文件名（不含扩展名）作为标题
+            
+            return {
+                "status": "success", 
+                "message": "PDF文件上传并添加到向量数据库成功",
+                "filename": unique_filename,
+                "original_filename": file.filename,
+                "title": title
+            }
+        except Exception as e:
+            print(f"处理PDF文件时出错: {str(e)}")
+            return {"status": "error", "message": f"文件已上传，但添加到向量数据库失败: {str(e)}"}
+    
+    except Exception as e:
+        print(f"上传文件时出错: {str(e)}")
+        return {"status": "error", "message": f"上传文件失败: {str(e)}"}
 

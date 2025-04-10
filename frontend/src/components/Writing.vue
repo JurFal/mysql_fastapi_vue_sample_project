@@ -7,8 +7,12 @@ import {ChatWithLLM} from "@/request/api";
 import PdfPreview from '@/components/PdfPreview.vue'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import axios from 'axios'
+// 导入用户存储
+import {useUserstore} from '@/store/user'
 
 const router = useRouter()
+// 获取用户存储
+const userStore = useUserstore()
 
 const ruleFormRef = vueRef<FormInstance>()
 
@@ -181,21 +185,49 @@ const generatePassage = async (passageIndex: number) => {
 
 // 保存段落到本地存储
 const savePassagesToLocalStorage = () => {
-  localStorage.setItem('paper-writing-passages', JSON.stringify(passages.value))
+  // 只有登录用户才保存数据
+  if (userStore.userName) {
+    localStorage.setItem(`paper-writing-passages-${userStore.userName}`, JSON.stringify(passages.value))
+  }
 }
 
-// 从本地存储加载段落
+// 修改从本地存储加载段落的方法，加入用户名前缀
 const loadPassagesFromLocalStorage = () => {
-  const savedPassages = localStorage.getItem('paper-writing-passages')
-  if (savedPassages) {
-    passages.value = JSON.parse(savedPassages)
+  // 只有登录用户才加载数据
+  if (userStore.userName) {
+    const savedPassages = localStorage.getItem(`paper-writing-passages-${userStore.userName}`)
+    if (savedPassages) {
+      passages.value = JSON.parse(savedPassages)
+    } else {
+      // 如果没有保存的数据，则清空当前数据
+      passages.value = []
+    }
+  } else {
+    // 未登录时清空数据
+    passages.value = []
   }
+}
+
+// 清除段落数据
+const clearPassages = () => {
+  passages.value = []
 }
 
 // 监听段落变化，保存到本地存储
 watch(passages, () => {
   savePassagesToLocalStorage()
 }, { deep: true })
+
+// 监听用户登录状态变化
+watch(() => userStore.userName, (newUserName, oldUserName) => {
+  if (newUserName) {
+    // 用户登录或切换账号，加载对应的段落数据
+    loadPassagesFromLocalStorage()
+  } else if (oldUserName) {
+    // 用户登出，清除段落数据
+    clearPassages()
+  }
+}, { immediate: true })
 
 // 组件挂载时加载本地存储的段落
 onMounted(() => {
@@ -235,6 +267,148 @@ const pdfUrl = vueRef<string>('')
 const texContent = vueRef<string>('')
 const showExportDialog = vueRef<boolean>(false)
 const isGenerating = vueRef<boolean>(false) // 新增：控制生成状态
+
+// 添加导出JSON配置的函数
+const exportConfig = () => {
+  if (passages.value.length === 0) {
+    ElMessage.warning('没有可导出的段落')
+    return
+  }
+  
+  // 准备导出数据
+  const exportData = {
+    paperTitle: paperTitle.value,
+    authorName: authorName.value,
+    templateType: templateType.value,
+    passages: passages.value
+  }
+  
+  // 创建Blob对象
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+  
+  // 创建下载链接
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `paper-config-${Date.now()}.json`
+  // 触发下载
+  document.body.appendChild(a)
+  a.click()
+  
+  // 清理
+  URL.revokeObjectURL(url)
+  document.body.removeChild(a)
+  
+  ElMessage.success('配置已导出')
+}
+
+// 添加导入JSON配置的函数
+const importConfig = (event: Event) => {
+  const fileInput = event.target as HTMLInputElement
+  const file = fileInput.files?.[0]
+  
+  if (!file) {
+    return
+  }
+  
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const content = e.target?.result as string
+      const importedData = JSON.parse(content)
+      
+      // 验证导入的数据格式
+      if (!importedData.passages || !Array.isArray(importedData.passages)) {
+        ElMessage.error('导入的配置格式不正确')
+        return
+      }
+      
+      // 更新数据
+      passages.value = importedData.passages
+      
+      // 如果有其他配置数据，也一并导入
+      if (importedData.paperTitle) paperTitle.value = importedData.paperTitle
+      if (importedData.authorName) authorName.value = importedData.authorName
+      if (importedData.templateType) templateType.value = importedData.templateType
+      
+      ElMessage.success('配置已导入')
+      
+      // 保存到本地存储
+      savePassagesToLocalStorage()
+    } catch (error) {
+      console.error('导入配置失败:', error)
+      ElMessage.error('导入配置失败，请检查文件格式')
+    }
+    
+    // 重置文件输入，以便可以重复导入同一个文件
+    fileInput.value = ''
+  }
+  
+  reader.readAsText(file)
+}
+
+// 创建一个隐藏的文件输入元素
+const fileInputRef = vueRef<HTMLInputElement | null>(null)
+const pdfInputRef = vueRef<HTMLInputElement | null>(null) // 新增PDF文件上传输入
+
+// 触发文件选择对话框
+const triggerFileInput = () => {
+  fileInputRef.value?.click()
+}
+
+// 触发PDF文件选择对话框
+const triggerPdfInput = () => {
+  pdfInputRef.value?.click()
+}
+
+// 上传PDF文件到论文库
+const uploadPaperToDB = async (event: Event) => {
+  const fileInput = event.target as HTMLInputElement
+  const file = fileInput.files?.[0]
+  
+  if (!file) {
+    return
+  }
+  
+  // 检查文件类型
+  if (file.type !== 'application/pdf') {
+    ElMessage.error('只支持上传PDF格式的论文')
+    fileInput.value = ''
+    return
+  }
+  
+  // 创建FormData对象
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  try {
+    // 显示上传中提示
+    const loadingInstance = ElMessage({
+      message: '正在上传论文并解析到向量数据库...',
+      type: 'info',
+      duration: 0
+    })
+    
+    // 发送上传请求
+    const response = await axios.post('/api/papers/upload/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+    
+    // 关闭上传中提示
+    loadingInstance.close()
+    
+    // 显示成功消息
+    ElMessage.success(`论文《${response.data.title || file.name}》上传成功`)
+  } catch (error) {
+    console.error('上传论文失败:', error)
+    ElMessage.error('上传论文失败，请稍后重试')
+  } finally {
+    // 重置文件输入，以便可以重复上传同一个文件
+    fileInput.value = ''
+  }
+}
 
 // 修改导出函数：只显示对话框，不立即发送请求
 const exportToLatex = () => {
@@ -324,7 +498,27 @@ const downloadLatex = () => {
 
 <template>
   <div class="writing-container">
-    <el-button type="primary" @click="addPassage">新建段落</el-button>
+    <!-- 添加导出和导入按钮 -->
+    <div class="top-actions">
+      <el-button type="primary" @click="addPassage">新建段落</el-button>
+      <el-button type="info" @click="exportConfig">导出配置</el-button>
+      <el-button type="warning" @click="triggerFileInput">导入配置</el-button>
+      <el-button type="success" @click="triggerPdfInput">上传至论文库...</el-button>
+      <input
+        type="file"
+        ref="fileInputRef"
+        style="display: none"
+        accept=".json"
+        @change="importConfig"
+      />
+      <input
+        type="file"
+        ref="pdfInputRef"
+        style="display: none"
+        accept=".pdf"
+        @change="uploadPaperToDB"
+      />
+    </div>
     
     <div v-for="(passage, index) in passages" :key="index" class="passage-item">
       <el-card class="passage-card">
@@ -505,6 +699,14 @@ const downloadLatex = () => {
 <style scoped>
 .writing-container {
   padding: 20px;
+}
+
+/* 添加顶部操作按钮的样式 */
+.top-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap; /* 确保在小屏幕上按钮可以换行 */
 }
 
 .passage-item {

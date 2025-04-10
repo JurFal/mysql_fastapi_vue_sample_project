@@ -49,6 +49,7 @@ def delete_user(db: Session, user_id: int):
         return True
     return False
 
+
 def delete_user_by_username(db: Session, username: str):
     db_user = get_user_by_username(db, username)
     if db_user:
@@ -56,3 +57,22 @@ def delete_user_by_username(db: Session, username: str):
         db.commit()
         return True
     return False
+
+
+def update_user_by_username(db: Session, username: str, user_update: schemas.UserUpdate):
+    db_user = get_user_by_username(db, username)
+    if not db_user:
+        return None
+    
+    update_data = user_update.dict(exclude_unset=True)
+    
+    # 如果更新包含密码，需要对其进行哈希处理
+    if "password" in update_data:
+        update_data["hashed_password"] = get_password_hash(update_data.pop("password"))
+    
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+    
+    db.commit()
+    db.refresh(db_user)
+    return db_user

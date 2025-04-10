@@ -34,3 +34,25 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+
+# 在现有的 schemas.py 文件中添加以下类
+
+class UserUpdate(BaseModel):
+    username: str | None = None
+    email: str | None = None
+    password: str | None = None
+    avatar: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    is_active: bool | None = None
+    
+    class Config:
+        orm_mode = True
+
+class VerifyPasswordRequest(BaseModel):
+    username: str
+    password: str
+
+class VerifyPasswordResponse(BaseModel):
+    success: bool

@@ -20,11 +20,11 @@ function change(key: string, keyPath: string[]) {
       class="el-menu-vertical-demo"
       :router=true
   >
-    <el-menu-item index="/index/">
+    <el-menu-item index="/index/modifyProfile">
       <el-icon>
         <icon-menu/>
       </el-icon>
-      <span>个人信息</span>
+      <span>修改信息</span>
     </el-menu-item>
     <el-menu-item index="/index/checkUserInfo">
       <el-icon>
@@ -42,7 +42,7 @@ function change(key: string, keyPath: string[]) {
       <el-icon>
         <ChatDotRound/>
       </el-icon>
-      <span>聊天</span>
+      <span>随便聊聊</span>
     </el-menu-item>
     <el-menu-item index="/index/writing">
       <el-icon>

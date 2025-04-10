@@ -77,5 +77,7 @@ onBeforeMount(() => {
   height: 100px;
   border-radius: 50%;
   margin-bottom: 20px;
+  object-fit: cover; /* 确保图片按比例裁剪以适应容器 */
+  object-position: center; /* 确保裁剪从中心开始 */
 }
 </style>

@@ -5,7 +5,7 @@ import type {FormInstance, FormRules} from 'element-plus'
 import {useRouter} from 'vue-router'
 import {useUserstore} from '@/store/user'
 
-const userStore=useUserstore()
+const userStore = useUserstore()
 const router = useRouter()
 
 const ruleFormRef = ref<FormInstance>()
@@ -51,9 +51,32 @@ const submitForm = (formEl: FormInstance | undefined) => {
         console.log(res)
         ElMessage.success('登录成功')
         
-        // 使用新的 action 方法
-        userStore.setToken(res.access_token)
-        userStore.setUserName(ruleForm.userName)
+        // 获取用户详细信息，包括头像
+        let avatarUrl = '';
+        try {
+          const userResponse = await fetch(`/users_api/users/name/${ruleForm.userName}`, {
+            headers: {
+              'Authorization': `Bearer ${res.access_token}`
+            }
+          })
+          
+          if (userResponse.ok) {
+            const userData = await userResponse.json()
+            // 获取用户头像
+            if (userData.avatar) {
+              avatarUrl = userData.avatar
+            }
+          }
+        } catch (error) {
+          console.error('获取用户信息失败:', error)
+        }
+        
+        // 使用 login 方法一次性设置所有用户信息
+        userStore.login({
+          userName: ruleForm.userName,
+          token: res.access_token,
+          avatar: avatarUrl
+        })
         
         // 检查是否有重定向参数
         const redirectPath = router.currentRoute.value.query.redirect as string

@@ -118,3 +118,15 @@ export const ChatWithLLM = (data: LLMRequest): Promise<LLMResponse> =>
 export const DeleteUserByUsername = (username: string) => {
   return instance.delete(`/users_api/users/name/${username}`);
 };
+
+
+// 添加更新用户信息的API
+export const UpdateUserInfo = (username: string, data: any) => {
+  return instance.put(`/users_api/users/name/${username}`, data);
+};
+
+
+// 添加验证密码的API
+export const VerifyPassword = (username: string, password: string) => {
+  return instance.post('/users_api/verify-password', {username, password});
+}
