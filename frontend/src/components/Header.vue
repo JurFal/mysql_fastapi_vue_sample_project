@@ -15,7 +15,7 @@ async function logout() {
 
 <template>
   <div style="display: flex; justify-content: space-between; align-items: center;">
-    <img src="https://fastapi.tiangolo.com/img/logo-margin/logo-teal.png" alt="Logo" style="height: 50px;">
+    <el-avatar :size="50" :src="userStore.avatar || 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'" />
     <div>
       <el-button type="info" @click="logout">登出</el-button>
     </div>

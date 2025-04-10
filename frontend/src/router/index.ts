@@ -9,6 +9,7 @@ import AddUser from "@/components/AddUser.vue";
 import Chat from "@/components/Chat.vue";
 import Writing from "@/components/Writing.vue";
 import Register from "@/pages/Register.vue";
+import {useUserstore} from "@/store/user";
 
 const routes =
     [
@@ -26,6 +27,7 @@ const routes =
             path: '/index',
             name: 'Index',
             component: Index,
+            meta: { requiresAuth: true }, // 添加需要认证的标记
             children: [
                 {
                     path: '',
@@ -47,6 +49,10 @@ const routes =
                     component: AddUser,
                 },
                 {
+                    path: 'modifyProfile',
+                    component: AddUser,
+                },
+                {
                     path: 'chat',
                     component: Chat,
                 },
@@ -65,8 +71,26 @@ const routes =
     ];
 
 const router = createRouter({
-    history: createWebHistory(),
-    routes
-});
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: routes
+})
 
-export default router;
+// 添加全局前置守卫
+router.beforeEach((to, from, next) => {
+  const userStore = useUserstore()
+  
+  // 检查该路由是否需要登录
+  if (to.matched.some(record => record.meta.requiresAuth)) {
+    if (!userStore.token) {
+      next({
+        path: '/',
+      })
+    } else {
+      next()
+    }
+  } else {
+    next()
+  }
+})
+
+export default router

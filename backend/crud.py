@@ -30,6 +30,7 @@ def create_user(db: Session, user: schemas.UserCreate):
     db_user = models.User(
         username=user.username,
         email=user.email,
+        avatar=user.avatar,
         first_name=user.first_name,
         last_name=user.last_name,
         hashed_password=hashed_password,
@@ -38,3 +39,20 @@ def create_user(db: Session, user: schemas.UserCreate):
     db.commit()
     db.refresh(db_user)
     return db_user
+
+
+def delete_user(db: Session, user_id: int):
+    db_user = db.query(models.User).filter(models.User.id == user_id).first()
+    if db_user:
+        db.delete(db_user)
+        db.commit()
+        return True
+    return False
+
+def delete_user_by_username(db: Session, username: str):
+    db_user = get_user_by_username(db, username)
+    if db_user:
+        db.delete(db_user)
+        db.commit()
+        return True
+    return False

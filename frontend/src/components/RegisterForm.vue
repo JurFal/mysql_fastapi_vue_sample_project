@@ -14,6 +14,7 @@ const registerForm = reactive({
   first_name:'',
   last_name:'',
   email:'',
+  avatar:'',
 })
 
 const submitForm = (formEl: FormInstance | undefined) => {
@@ -26,7 +27,8 @@ const submitForm = (formEl: FormInstance | undefined) => {
           password: registerForm.password,
           first_name: registerForm.first_name,
           last_name: registerForm.last_name,
-          email: registerForm.email
+          email: registerForm.email,
+          avatar: registerForm.avatar
         })
         ElMessage.success('注册成功')
         await router.push('/');
@@ -75,6 +77,10 @@ function jumpToLogin() {
 
     <el-form-item label="邮箱" prop="email">
       <el-input v-model="registerForm.email" type="text" autocomplete="off"/>
+    </el-form-item>
+
+    <el-form-item label="头像（URL）" prop="avatar">
+      <el-input v-model="registerForm.avatar" type="text" autocomplete="off"/>
     </el-form-item>
 
     <el-form-item>

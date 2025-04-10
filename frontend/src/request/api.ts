@@ -17,6 +17,7 @@ interface ReqRegister {
     first_name: string
     last_name: string
     password: string
+    avatar: string
 }
 
 
@@ -43,6 +44,7 @@ interface User {
     last_name: string
     is_active: boolean
     is_superuser: boolean
+    avatar: string
 }
 
 interface UserList {
@@ -109,4 +111,10 @@ export const GetUserInfoList = (params: { skip: number, limit: number }): Promis
     instance.get(`/users_api/users/`, {params});
 
 export const ChatWithLLM = (data: LLMRequest): Promise<LLMResponse> =>
-    instance.post(`/api/chat/`, data);
+    instance.post(`/api/chat/stream/`, data);
+
+
+// 根据用户名删除用户
+export const DeleteUserByUsername = (username: string) => {
+  return instance.delete(`/users_api/users/name/${username}`);
+};

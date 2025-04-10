@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
+import subprocess
+import time
+import os
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -8,12 +11,17 @@ from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 
 from sqlalchemy.orm import Session
+import sqlalchemy.exc
 
 import crud, models, schemas
 from database import SessionLocal, engine
 from security import verify_password
 
 import requests
+from fastapi import FastAPI
+from proxy import router as proxy_router
+
+app = FastAPI()
 
 
 # to get a string like this run:
@@ -23,7 +31,46 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
-models.Base.metadata.create_all(bind=engine)
+# 尝试启动 MySQL 服务
+def ensure_mysql_running():
+    try:
+        # 尝试创建一个测试连接
+        test_engine = engine.connect()
+        test_engine.close()
+        print("MySQL 服务已经在运行")
+    except sqlalchemy.exc.OperationalError:
+        print("MySQL 服务未运行，尝试启动...")
+        try:
+            subprocess.run(["brew", "services", "start", "mysql"], check=True)
+            print("MySQL 服务启动命令已执行，等待服务启动...")
+            time.sleep(10)  # 给 MySQL 一些启动时间
+            
+            # 再次尝试连接
+            for i in range(5):
+                try:
+                    test_engine = engine.connect()
+                    test_engine.close()
+                    print("MySQL 服务已成功启动")
+                    return
+                except sqlalchemy.exc.OperationalError:
+                    print(f"等待 MySQL 启动... 尝试 {i+1}/5")
+                    time.sleep(5)
+            
+            print("无法启动 MySQL 服务，请手动检查")
+        except subprocess.CalledProcessError:
+            print("启动 MySQL 服务失败，请确保已安装 MySQL 并有足够权限")
+        except Exception as e:
+            print(f"启动 MySQL 时发生错误: {e}")
+
+
+# 在应用启动前确保 MySQL 运行
+ensure_mysql_running()
+
+# 创建数据库表
+try:
+    models.Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"创建数据库表时出错: {e}")
 
 
 class Token(BaseModel):
@@ -36,8 +83,6 @@ class TokenData(BaseModel):
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-app = FastAPI()
 
 
 # Dependency
@@ -157,6 +202,23 @@ async def read_user(
     return db_user
 
 
+@app.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+        current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+        user_id: int,
+        db: SessionDep
+):
+
+    # 检查用户是否存在
+    db_user = crud.get_user(db, user_id=user_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 删除用户
+    crud.delete_user(db, user_id=user_id)
+    return None  # 204状态码不需要返回内容
+
+
 @app.get("/users/name/{username}", response_model=schemas.User)
 async def read_user(
         current_user: Annotated[schemas.User, Depends(get_current_active_user)],
@@ -168,6 +230,28 @@ async def read_user(
     if db_user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return db_user
+
+@app.delete("/users/name/{username}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_by_username(
+        current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+        username: str,
+        db: SessionDep
+):
+    # 可以添加权限检查，例如只允许管理员或用户自己删除
+    # if not current_user.is_admin and current_user.username != username:
+    #    raise HTTPException(
+    #        status_code=status.HTTP_403_FORBIDDEN,
+    #        detail="没有足够权限执行此操作"
+    #    )
+    
+    # 检查用户是否存在
+    db_user = crud.get_user_by_username(db, username=username)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 删除用户
+    crud.delete_user_by_username(db, username=username)
+    return None
 
 
 @app.post("/chat", response_model=schemas.ChatResponse)
@@ -185,3 +269,8 @@ async def chat(
         ]
     })
     return schemas.ChatResponse(response=resp.json()['choices'][0]['message']['content'])
+
+
+# 注册代理路由
+app.include_router(proxy_router, prefix="/proxy")
+

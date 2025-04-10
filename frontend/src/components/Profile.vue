@@ -13,7 +13,7 @@ let user = ref({
   first_name: '',
   last_name: '',
   email: '',
-  avatar: 'https://tse4-mm.cn.bing.net/th/id/OIP-C.ffVjXyf76-70IQYd75H7wgAAAA?rs=1&pid=ImgDetMain', // 假设的头像URL
+  avatar: 'https://avatars.githubusercontent.com/u/112413958?s=400&u=24970d0e0773bb7d637374458fca9e8f12a06591&v=4', // 假设的头像URL
 })
 
 async function getUserInfo() {
@@ -22,7 +22,10 @@ async function getUserInfo() {
     console.log(route.params)
     if ('username' in route.params) {
       console.log(route.params.username)
-      username = route.params.username
+      // 修复类型错误：确保 username 是字符串类型
+      username = Array.isArray(route.params.username) 
+        ? route.params.username[0] 
+        : route.params.username
     }
     let res = await GetUserInfoByUserName({
       userName: username
@@ -35,6 +38,8 @@ async function getUserInfo() {
       user.value.email = res.email
     user.value.first_name = res.first_name
     user.value.last_name = res.last_name
+    if (res.avatar !== null)
+      user.value.avatar = res.avatar
   } catch (e) {
     console.log(e)
     ElMessage.error('个人信息查询失败')

@@ -1,4 +1,4 @@
-# FastAPI + Vue 示例项目
+# FastAPI + Vue 论文写作助手
 
 三层架构：
 - 界面：`frontend`

@@ -10,7 +10,7 @@ pip install -r requirements.txt
 
 ## 数据库
 
-本项目默认使用Sqlite3数据库（会在当前目录生成`sqlite.db`文件），连接字符串在`database.py`文件中配置，表结构（`CREATE TABLE`）会在程序启动时自动创建。
+本项目使用MySQL数据库，连接字符串在`database.py`文件中配置，表结构（`CREATE TABLE`）会在程序启动时自动创建。
 
 ## 启动
 

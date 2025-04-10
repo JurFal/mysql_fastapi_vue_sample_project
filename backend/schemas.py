@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class UserBase(BaseModel):
     username: str
     email: str
+    avatar: Optional[str] = None
     first_name: str
     last_name: str
 

@@ -49,16 +49,25 @@ const submitForm = (formEl: FormInstance | undefined) => {
           password: ruleForm.password
         })
         console.log(res)
-        ElMessage.success('登陆成功')
-        userStore.token = res.access_token
-        userStore.userName=ruleForm.userName
-        await router.push({ name: 'IndexMain', params: { userName: ruleForm.userName } });
+        ElMessage.success('登录成功')
+        
+        // 使用新的 action 方法
+        userStore.setToken(res.access_token)
+        userStore.setUserName(ruleForm.userName)
+        
+        // 检查是否有重定向参数
+        const redirectPath = router.currentRoute.value.query.redirect as string
+        if (redirectPath) {
+          await router.push(redirectPath)
+        } else {
+          await router.push('/index')
+        }
       } catch (e) {
         console.log(e)
-        ElMessage.error('登陆失败，请重新输入用户名和密码')
+        ElMessage.error('登录失败，请重新输入用户名和密码')
       }
     } else {
-      ElMessage.error('登陆失败，未输入用户名和密码')
+      ElMessage.error('登录失败，未输入用户名和密码')
       return false
     }
   })
