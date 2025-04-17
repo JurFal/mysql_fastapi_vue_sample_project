@@ -48,25 +48,71 @@ interface ChatMessage {
 // 存储对话历史，指定类型为 ChatMessage 数组
 const chatHistory = ref<ChatMessage[]>([]);
 const isTyping = ref(false);
+// 添加一个标志，用于控制是否应该保存变化
+const isLoading = ref(false);
 
 // 从 localStorage 加载对话历史
-const loadChatHistory = () => {
+const loadChatHistory = async () => {
   const username = userStore.userName;
   if (!username) return;
   
-  const savedHistory = localStorage.getItem(`chat_history_${username}`);
-  if (savedHistory) {
-    try {
-      const parsedHistory = JSON.parse(savedHistory);
-      chatHistory.value = parsedHistory;
-    } catch (e) {
-      console.error('加载对话历史失败:', e);
+  try {
+    // 设置加载标志为 true，防止触发保存
+    isLoading.value = true;
+    
+    // 尝试从后端API加载 - 使用正确的GET端点
+    const response = await fetch('/users_api/get/chat/', {  // 修改为正确的GET端点
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${userStore.token}`
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.chat_data) {
+        try {
+          const parsedHistory = JSON.parse(data.chat_data);
+          if (Array.isArray(parsedHistory)) {
+            chatHistory.value = parsedHistory;
+            return;
+          }
+        } catch (e) {
+          console.error('解析聊天历史失败:', e);
+        }
+      }
     }
+    
+    // 如果API加载失败，尝试从localStorage加载
+    const savedHistory = localStorage.getItem(`chat_history_${username}`);
+    if (savedHistory) {
+      try {
+        const parsedHistory = JSON.parse(savedHistory);
+        chatHistory.value = parsedHistory;
+      } catch (e) {
+        console.error('从localStorage加载对话历史失败:', e);
+      }
+    }
+  } catch (e) {
+    console.error('加载对话历史失败:', e);
+    // 尝试从localStorage加载作为备份
+    const savedHistory = localStorage.getItem(`chat_history_${username}`);
+    if (savedHistory) {
+      try {
+        const parsedHistory = JSON.parse(savedHistory);
+        chatHistory.value = parsedHistory;
+      } catch (parseError) {
+        console.error('解析localStorage中的对话历史失败:', parseError);
+      }
+    }
+  } finally {
+    // 无论成功或失败，最后都将加载标志设置为 false
+    isLoading.value = false;
   }
 };
 
-// 保存对话历史到 localStorage
-const saveChatHistory = () => {
+// 保存对话历史到数据库
+const saveChatHistory = async () => {
   const username = userStore.userName;
   if (!username) return;
   
@@ -76,30 +122,49 @@ const saveChatHistory = () => {
       role: msg.role,
       content: msg.content
     }));
-    localStorage.setItem(`chat_history_${username}`, JSON.stringify(historyToSave));
+    
+    // 调用后端 API 保存聊天历史
+    await fetch('/users_api/save/chat/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userStore.token}`
+      },
+      body: JSON.stringify({ 
+        chat_data: JSON.stringify(historyToSave) 
+      })
+    });
   } catch (e) {
     console.error('保存对话历史失败:', e);
   }
 };
 
 // 清除对话历史
-const clearChatHistory = () => {
-  chatHistory.value = [];
-  saveChatHistory();
-  ElMessage.success('对话历史已清除');
+const clearChatHistory = async () => {
+  try {
+    // 调用后端 API 删除聊天历史
+    await fetch('/api/delete/chat/', {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${userStore.token}`
+      }
+    });
+    
+    chatHistory.value = [];
+    ElMessage.success('对话历史已清除');
+  } catch (e) {
+    console.error('清除对话历史失败:', e);
+    ElMessage.error('清除对话历史失败');
+  }
 };
 
 // 监听对话历史变化，自动保存
 watch(chatHistory, () => {
-  if (!isTyping.value) {
+  // 只有在不是加载中且不是输入中时才保存
+  if (!isLoading.value && !isTyping.value) {
     saveChatHistory();
   }
 }, { deep: true });
-
-// 组件挂载时加载对话历史
-onMounted(() => {
-  loadChatHistory();
-});
 
 // 添加一个新的状态变量，表示是否所有响应都已完成
 const responseComplete = ref(true);
@@ -248,6 +313,15 @@ const scrollToBottom = () => {
     }
   });
 };
+
+// 处理按下 Enter 键发送消息
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault() // 阻止默认的换行行为
+    submitForm(ruleFormRef.value)
+  }
+}
+
 </script>
 
 <template>

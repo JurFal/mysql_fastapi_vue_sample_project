@@ -28,7 +28,7 @@ app = FastAPI()
 # openssl rand -hex 32
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 999
 
 
 # 尝试启动 MySQL 服务
@@ -106,9 +106,9 @@ def authenticate_user(db: Session, username: str, password: str):
 def create_access_token(data: dict, expires_delta: timedelta | None = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta # 修改这里
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES) # 修改这里
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -158,7 +158,7 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
+    access_token = create_access_token( # 调用 create_access_token
         data={"sub": user.username}, expires_delta=access_token_expires
     )
     return Token(access_token=access_token, token_type="bearer")
@@ -324,4 +324,186 @@ async def verify_password_endpoint(
         )
     
     return schemas.VerifyPasswordResponse(success=True)
+
+
+@app.post("/save/chat/", response_model=schemas.ChatHistory)
+async def save_chat_history(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    chat_data: schemas.ChatHistoryCreate,
+    db: SessionDep
+):
+    # 检查用户是否已有聊天历史
+    existing_history = crud.get_chat_history(db, current_user.id)
+    
+    if existing_history:
+        # 更新现有聊天历史
+        updated_history = crud.update_chat_history(db, current_user.id, chat_data.chat_data)
+        if updated_history is None:
+            raise HTTPException(status_code=500, detail="更新聊天历史失败")
+        return updated_history
+    else:
+        # 创建新的聊天历史
+        return crud.create_chat_history(db, current_user.id, chat_data.chat_data)
+
+
+@app.get("/get/chat/", response_model=schemas.ChatHistory)
+async def get_chat_history(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    db: SessionDep
+):
+    # 获取用户的聊天历史
+    chat_history = crud.get_chat_history(db, current_user.id)
+    if not chat_history:
+        raise HTTPException(status_code=404, detail="聊天历史不存在")
+    return chat_history
+
+
+@app.delete("/delete/chat/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_chat_history(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    db: SessionDep
+):
+    # 删除用户的聊天历史
+    result = crud.delete_chat_history(db, current_user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="聊天历史不存在")
+    return None  # 204状态码不需要返回内容
+
+
+@app.post("/users/id-by-username/", response_model=schemas.UserID)
+async def get_user_id_by_username(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    username_request: schemas.UsernameRequest,
+    db: SessionDep
+):
+    db_user = crud.get_user_by_username(db, username=username_request.username)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"id": db_user.id}
+
+
+@app.post("/save/writing/", response_model=schemas.WritingHistory)
+async def save_writing_history(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    writing_data: schemas.WritingHistoryCreate,
+    db: SessionDep
+):
+    # 检查用户是否已有写作历史
+    existing_history = crud.get_writing_history(db, current_user.id)
+    
+    if existing_history:
+        # 更新现有写作历史
+        updated_history = crud.update_writing_history(db, current_user.id, writing_data.writing_data)
+        if updated_history is None:
+            raise HTTPException(status_code=500, detail="更新写作历史失败")
+        return updated_history
+    else:
+        # 创建新的写作历史
+        return crud.create_writing_history(db, current_user.id, writing_data.writing_data)
+
+
+@app.get("/get/writing/", response_model=schemas.WritingHistory)
+async def get_writing_history(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    db: SessionDep
+):
+    # 获取用户的写作历史
+    writing_history = crud.get_writing_history(db, current_user.id)
+    if not writing_history:
+        raise HTTPException(status_code=404, detail="写作历史不存在")
+    return writing_history
+
+
+@app.get("/list/writings/", response_model=schemas.WritingHistoryList)
+async def list_writing_histories(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    db: SessionDep,
+    skip: int = 0,
+    limit: int = 100
+):
+    # 获取用户的所有写作历史列表
+    writing_histories = crud.get_all_writing_histories(db, user_id=current_user.id, skip=skip, limit=limit)
+    total = crud.count_writing_histories(db, user_id=current_user.id)
+    return schemas.WritingHistoryList(total=total, writing_histories=writing_histories)
+
+
+@app.post("/create/writing/", response_model=schemas.WritingHistory)
+async def create_writing_history(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    writing_data: schemas.WritingHistoryCreate,
+    db: SessionDep
+):
+    # 创建新的写作历史
+    return crud.create_writing_history(db, current_user.id, writing_data.writing_data)
+
+
+@app.delete("/delete/writing/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_writing_history(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    db: SessionDep
+):
+    # 删除用户的写作历史
+    result = crud.delete_writing_history(db, current_user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="写作历史不存在")
+    return None  # 204状态码不需要返回内容
+
+
+# 后端API实现
+
+@app.get("/get/writing/all/", response_model=list[schemas.WritingHistory])
+async def get_all_writing_histories(
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    db: SessionDep,
+    skip: int = 0,
+    limit: int = 100
+):
+    """获取当前用户的所有写作历史记录"""
+    # 获取用户的所有写作历史
+    writing_histories = crud.get_all_writing_histories_by_user(db, user_id=current_user.id, skip=skip, limit=limit)
+    if not writing_histories:
+        return []
+    return writing_histories
+
+
+@app.delete("/delete/writing/{writing_id}/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_writing_history_by_id(
+    writing_id: int,
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    db: SessionDep
+):
+    """删除指定ID的写作历史记录"""
+    # 删除指定ID的写作历史，并验证该历史属于当前用户
+    result = crud.delete_writing_history_by_id(db, writing_id, current_user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="写作历史不存在或无权限删除")
+    return None  # 204状态码不需要返回内容
+
+
+@app.put("/update/writing/{writing_id}/", response_model=schemas.WritingHistory)
+async def update_writing_history_by_id(
+    writing_id: int,
+    writing_data: schemas.WritingHistoryCreate,
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    db: SessionDep
+):
+    """更新指定ID的写作历史记录"""
+    # 更新指定ID的写作历史，并验证该历史属于当前用户
+    updated_history = crud.update_writing_history_by_id(db, writing_id, current_user.id, writing_data.writing_data)
+    if updated_history is None:
+        raise HTTPException(status_code=404, detail="写作历史不存在或无权限更新")
+    return updated_history
+
+
+@app.get("/get/writing/{writing_id}/", response_model=schemas.WritingHistory)
+async def get_writing_history_by_id(
+    writing_id: int,
+    current_user: Annotated[schemas.User, Depends(get_current_active_user)],
+    db: SessionDep
+):
+    """根据ID获取指定写作历史记录"""
+    writing_history = crud.get_writing_history_by_id(db, writing_id, current_user.id)
+    if not writing_history:
+        raise HTTPException(status_code=404, detail="写作历史不存在或无权限访问")
+    return writing_history
 

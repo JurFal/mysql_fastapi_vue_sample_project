@@ -2,6 +2,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel
 
+import datetime
+from typing import Optional # 导入 Optional
 
 class UserBase(BaseModel):
     username: str
@@ -48,7 +50,7 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
     
     class Config:
-        orm_mode = True
+        from_attributes = True  # 替换 orm_mode = True
 
 class VerifyPasswordRequest(BaseModel):
     username: str
@@ -56,3 +58,49 @@ class VerifyPasswordRequest(BaseModel):
 
 class VerifyPasswordResponse(BaseModel):
     success: bool
+
+
+class ChatHistoryBase(BaseModel):
+    chat_data: str
+
+class ChatHistoryCreate(ChatHistoryBase):
+    pass
+
+class ChatHistory(ChatHistoryBase):
+    id: int
+    user_id: int
+    # 删除了 created_at 和 updated_at 字段
+
+    class Config:
+        from_attributes = True  # 替换 orm_mode = True
+
+
+class UsernameRequest(BaseModel):
+    username: str
+
+class UserID(BaseModel):
+    id: int
+
+
+class WritingHistoryBase(BaseModel):
+    writing_data: str
+
+
+class WritingHistoryCreate(WritingHistoryBase):
+    pass
+
+
+class WritingHistory(WritingHistoryBase):
+    id: int
+    user_id: int
+    # 将类型改为 Optional[datetime.datetime] 以允许 None
+    created_at: Optional[datetime.datetime]
+    updated_at: Optional[datetime.datetime]
+
+    class Config:
+        from_attributes = True # Replaces orm_mode=True in Pydantic v2
+
+
+class WritingHistoryList(BaseModel):
+    total: int
+    writing_histories: list[WritingHistory]

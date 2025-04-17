@@ -32,12 +32,12 @@ function change(key: string, keyPath: string[]) {
       </el-icon>
       <span>所有用户</span>
     </el-menu-item>
-    <el-menu-item index="/index/addUser">
+    <!--<el-menu-item index="/index/addUser">
       <el-icon>
         <setting/>
       </el-icon>
       <span>添加用户</span>
-    </el-menu-item>
+    </el-menu-item>-->
     <el-menu-item index="/index/chat">
       <el-icon>
         <ChatDotRound/>

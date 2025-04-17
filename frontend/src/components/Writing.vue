@@ -1,98 +1,49 @@
 <script setup lang="ts">
-import { ref as vueRef, reactive, nextTick, onMounted, watch } from 'vue'
-import type {FormInstance, FormRules} from 'element-plus'
-import {useRouter} from 'vue-router'
-import {ElMessage} from 'element-plus'
-import {ChatWithLLM} from "@/request/api";
-import PdfPreview from '@/components/PdfPreview.vue'
+// 导入 ref, reactive, nextTick, onMounted, watch, computed
+import { ref as vueRef, reactive, nextTick, onMounted, watch, computed } from 'vue'
+// 导入 ElMessage, ElContainer, ElAside, ElMain
+import {ElMessage, ElContainer, ElAside, ElMain} from 'element-plus'
 import MarkdownPreview from '@/components/MarkdownPreview.vue'
 import axios from 'axios'
 // 导入用户存储
 import {useUserstore} from '@/store/user'
+// 导入历史记录侧边栏组件
+import WritingHistory from '@/components/WritingHistory.vue'
+// 导入 debounce
+import { debounce } from 'lodash-es';
 
-const router = useRouter()
 // 获取用户存储
 const userStore = useUserstore()
 
-const ruleFormRef = vueRef<FormInstance>()
-
-const chatForm = reactive({
-  prompt: '',
-  response: '',
-})
-
-const submitForm = (formEl: FormInstance | undefined) => {
-  if (!formEl) return
-  formEl.validate(async (valid) => {
-    if (valid) {
-      try {
-        let res =  await ChatWithLLM({
-          messages: [
-            {
-              role: "user",
-              content: "以下是论文关键词：" + chatForm.prompt + "。生成一篇相关的论文摘要和段落大纲"
-            }
-          ]
-        })
-        chatForm.response = res.choices[0].message.content
-      } catch (e) {
-        console.log(e)
-      }
-    } else {
-      return false
-    }
-  })
-}
-
-// 处理按下 Enter 键发送消息
-const handleKeyDown = (event: KeyboardEvent) => {
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault() // 阻止默认的换行行为
-    submitForm(ruleFormRef.value)
-  }
-}
-
-// 处理文件上传
-// 删除原来的 handleFileUpload 函数，添加下载 Markdown 文件的函数
-const downloadMarkdown = () => {
-  if (!chatForm.response.trim()) {
-    ElMessage.warning('暂无内容可下载')
-    return
-  }
-  
-  // 创建 Blob 对象
-  const blob = new Blob([chatForm.response], { type: 'text/markdown' })
-  
-  // 创建下载链接
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = '论文大纲.md' // 设置下载文件名
-  
-  // 触发下载
-  document.body.appendChild(a)
-  a.click()
-  
-  // 清理
-  URL.revokeObjectURL(url)
-  document.body.removeChild(a)
-}
 interface Passage {
   passage_type: string
   passage_tag: string[]
   inputVisible: boolean
   inputValue: string
-  showPreview: boolean
+  showPreview: boolean // 这个字段似乎不再使用，可以考虑移除
   passage_title: string
   passage: string
   references: string[]
   loading: boolean
   isGenerated: boolean
-  showReferences: boolean // 新增字段，控制参考文献的折叠/展开状态
+  showReferences: boolean
 }
 
 const passages = vueRef<Passage[]>([])
 const tagInputRef = vueRef<HTMLInputElement | null>(null)
+
+// 新增：当前编辑的历史记录ID
+const currentHistoryId = vueRef<number | null>(null)
+
+// --- 将导出相关的变量声明移到这里 ---
+const paperTitle = vueRef<string>('论文标题')
+const authorName = vueRef<string>('作者姓名')
+const templateType = vueRef<string>('article')
+const pdfUrl = vueRef<string>('')
+const texContent = vueRef<string>('')
+const showExportDialog = vueRef<boolean>(false)
+const isGenerating = vueRef<boolean>(false)
+const loading = vueRef<boolean>(false); // 添加全局 loading 状态
 
 // 添加新段落
 const addPassage = () => {
@@ -107,17 +58,17 @@ const addPassage = () => {
     references: [],
     loading: false,
     isGenerated: false,
-    showReferences: false // 默认折叠参考文献
+    showReferences: false
   })
-  // 保存到本地存储
-  savePassagesToLocalStorage()
+  // 自动保存会处理
+  // savePassagesToLocalStorage() // 移除显式调用
 }
 
 // 删除段落
 const removePassage = (index: number) => {
   passages.value.splice(index, 1)
-  // 保存到本地存储
-  savePassagesToLocalStorage()
+  // 自动保存会处理
+  // savePassagesToLocalStorage() // 移除显式调用
 }
 
 // 显示标签输入框
@@ -173,8 +124,8 @@ const generatePassage = async (passageIndex: number) => {
     passage.isGenerated = true // 标记为已生成
     // 不再设置 showPreview 为 true，因为我们不使用弹窗了
     
-    // 保存到本地存储
-    savePassagesToLocalStorage()
+    // 保存到本地存储 -> 修改为调用新的保存函数
+    saveCurrentWritingState(); // <--- 修改点: 调用重命名后的函数
   } catch (error) {
     console.error('生成段落失败:', error)
     ElMessage.error('生成段落失败，请稍后重试')
@@ -183,62 +134,223 @@ const generatePassage = async (passageIndex: number) => {
   }
 }
 
-// 保存段落到本地存储
-const savePassagesToLocalStorage = () => {
+// 重命名函数并修改逻辑：保存当前写作状态到数据库
+const saveCurrentWritingState = async () => {
   // 只有登录用户才保存数据
-  if (userStore.userName) {
-    localStorage.setItem(`paper-writing-passages-${userStore.userName}`, JSON.stringify(passages.value))
+  if (!userStore.userName) return;
+
+  // 检查：如果是新建状态且没有任何段落，则不保存
+  if (
+    currentHistoryId.value === null &&
+    (passages.value.length === 0 ||
+      (passages.value.length === 1 &&
+        !passages.value[0].passage_type &&
+        !passages.value[0].passage_title &&
+        !passages.value[0].passage))
+  ) {
+    // 空内容不保存
+    return;
+  }
+
+  // 组装要保存的数据
+  const writingData = JSON.stringify({
+    paperTitle: paperTitle.value,
+    authorName: authorName.value,
+    templateType: templateType.value,
+    passages: passages.value,
+  });
+
+  try {
+    if (currentHistoryId.value === null) {
+      // 新建历史记录
+      const response = await axios.post(
+        '/users_api/create/writing/',
+        { writing_data: writingData },
+        {
+          headers: {
+            Authorization: `Bearer ${userStore.token}`,
+          },
+        }
+      );
+      // 保存新建的ID
+      if (response.data && response.data.id) {
+        currentHistoryId.value = response.data.id;
+      }
+    } else {
+      // 更新已有历史记录
+      await axios.put(
+        `/users_api/update/writing/${currentHistoryId.value}/`,
+        { writing_data: writingData },
+        {
+          headers: {
+            Authorization: `Bearer ${userStore.token}`,
+          },
+        }
+      );
+    }
+    // 新增：保存成功后刷新左侧历史列表
+    WritingHistory.value?.fetchHistories?.();
+    // 新增：如果当前分支被删除（即 currentHistoryId 已经不存在于 histories），自动切换到最新分支
+    // 需要先刷新历史列表
+    const histories = await writingHistoryRef.value?.fetchHistories?.();
+    // histories 可能未返回，保险起见再取一次
+    
+    await writingHistoryRef.value?.deleteAllUntitledHistories?.();
+    let latest = null;
+    if (histories && histories.length > 0) {
+      latest = histories[0];
+    }
+    if (latest && currentHistoryId.value !== latest.id) {
+      currentHistoryId.value = latest.id;
+      // 主动加载最新分支内容
+      // 你可以直接调用 handleSelectHistory 或 loadHistoryData
+      handleSelectHistory(latest);
+      writingHistoryRef.value?.setActiveHistoryId(latest.id);
+    }
+  } catch (e: any) {
+    console.error('保存写作历史失败:', e);
+    ElMessage.error('保存写作历史失败，请稍后重试');
   }
 }
 
-// 修改从本地存储加载段落的方法，加入用户名前缀
-const loadPassagesFromLocalStorage = () => {
-  // 只有登录用户才加载数据
+// 使用 debounce 包装保存函数，延迟 1.5 秒执行
+const debouncedSave = debounce(saveCurrentWritingState, 1500); // <--- 修改点: 包装重命名后的函数
+
+// 修改：从数据库加载指定的或最新的历史记录
+// (loadHistoryData 函数保持不变)
+const loadHistoryData = (data: any) => {
+    if (data) {
+        const parsedData = JSON.parse(data.writing_data);
+        if (parsedData.passages && Array.isArray(parsedData.passages)) {
+            passages.value = parsedData.passages;
+            paperTitle.value = parsedData.paperTitle || '论文标题';
+            authorName.value = parsedData.authorName || '作者姓名';
+            templateType.value = parsedData.templateType || 'article';
+            currentHistoryId.value = data.id; // 设置当前加载的历史记录ID
+            return true; // 加载成功
+        }
+    }
+    return false; // 加载失败或数据无效
+}
+
+// 新增：处理从侧边栏选择历史记录的事件
+const handleSelectHistory = (history: any) => {
+  console.log("Selected history:", history.id, "Is new:", history.isNew); // 打印接收到的 history 对象
+  if (!loadHistoryData(history)) {
+      ElMessage.error('加载选定的历史记录失败');
+      // 加载失败，可以选择清空或保持当前状态
+      handleCreateNew(); // 回到新建状态
+  } else {
+      // 加载成功后，检查是否是新创建的
+      if (history.isNew === true) {
+          console.log("Adding default passage for new history.");
+          // 添加一个默认段落
+          passages.value.push({
+              passage_type: '引言', // 默认类型
+              passage_tag: ['默认'], // 默认标签
+              inputVisible: false,
+              inputValue: '',
+              showPreview: false, // 确保与 Passage 接口一致
+              passage_title: '', // 初始为空
+              passage: '',       // 初始为空
+              references: [],    // 初始为空
+              loading: false,
+              isGenerated: false,
+              showReferences: false
+          });
+          // 可以在这里触发一次保存，以将这个默认段落存入数据库
+          saveCurrentWritingState(); // 或者等待 debouncedSave 自动触发
+      }
+  }
+}
+
+// 新增：处理新建历史记录的事件 (这个函数现在主要用于清空状态)
+const handleCreateNew = () => {
+  console.log("Clearing state for new history / load failure.");
+  passages.value = [];
+  paperTitle.value = '论文标题';
+  authorName.value = '作者姓名';
+  templateType.value = 'article';
+  currentHistoryId.value = null; // 清除当前ID，表示新建状态
+  // 清空导出对话框状态 (如果需要)
+  texContent.value = '';
+  pdfUrl.value = '';
+  isGenerating.value = false;
+  showExportDialog.value = false;
+}
+
+// 修改：加载初始数据 (最新历史记录)
+const loadInitialData = async () => {
   if (userStore.userName) {
-    const savedPassages = localStorage.getItem(`paper-writing-passages-${userStore.userName}`)
-    if (savedPassages) {
-      passages.value = JSON.parse(savedPassages)
-    } else {
-      // 如果没有保存的数据，则清空当前数据
-      passages.value = []
+    loading.value = true; // 可以添加一个全局 loading 状态
+    try {
+      // 尝试从后端API加载所有历史记录，然后选最新的
+      const response = await axios.get('/users_api/get/writing/all/', {
+        headers: {
+          'Authorization': `Bearer ${userStore.token}`
+        }
+      });
+
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        // 按更新时间排序，最新的在前面
+        const sortedHistories = response.data.sort((a: any, b: any) =>
+          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+        );
+        // 加载最新的历史记录
+        if (!loadHistoryData(sortedHistories[0])) {
+            // 如果最新的记录加载失败，则创建新的
+            handleCreateNew();
+        }
+      } else {
+        // 没有历史记录，创建新的
+        handleCreateNew();
+      }
+    } catch (e) {
+      console.error('加载初始写作历史失败:', e);
+      ElMessage.error('加载历史记录失败');
+      // 加载失败也进入新建状态
+      handleCreateNew();
+    } finally {
+        loading.value = false;
     }
   } else {
     // 未登录时清空数据
-    passages.value = []
+    handleCreateNew();
   }
 }
 
-// 清除段落数据
-const clearPassages = () => {
-  passages.value = []
-}
+// 移除 clearPassages 函数，其逻辑合并到 handleCreateNew
 
-// 监听段落变化，保存到本地存储
-watch(passages, () => {
-  savePassagesToLocalStorage()
+// 修改：监听段落和元数据变化，使用 debounce 自动保存
+// 现在 paperTitle, authorName, templateType 已经在此之前声明了
+const writingHistoryRef = vueRef<any>(null); // 1. 声明 ref
+
+watch([passages, paperTitle, authorName, templateType], () => {
+  saveCurrentWritingState();
+  // 2. 变动时调用 fetchHistories
+  writingHistoryRef.value?.fetchHistories?.();
 }, { deep: true })
 
-// 监听用户登录状态变化
+// 修改：监听用户登录状态变化
 watch(() => userStore.userName, (newUserName, oldUserName) => {
   if (newUserName) {
-    // 用户登录或切换账号，加载对应的段落数据
-    loadPassagesFromLocalStorage()
-  } else if (oldUserName) {
+    // 用户登录或切换账号，加载对应的最新段落数据
+    loadInitialData()
+  } else {
     // 用户登出，清除段落数据
-    clearPassages()
+    handleCreateNew()
   }
-}, { immediate: true })
+}, { immediate: true }) // 保持 immediate: true 以处理初始加载
 
-// 组件挂载时加载本地存储的段落
+// 修改：组件挂载时加载数据 (如果用户已登录)
 onMounted(() => {
-  loadPassagesFromLocalStorage()
+  // loadInitialData 会在 watch immediate:true 中被调用，这里无需重复调用
+  // if (userStore.userName) {
+  //   loadInitialData()
+  // }
 })
 
-// 格式化段落内容（将换行符转换为 <br>）
-const formatPassage = (text: string) => {
-  if (!text) return ''
-  return text.replace(/\n/g, '<br>')
-}
+writingHistoryRef.value?.setActiveHistoryId(currentHistoryId.value);
 
 // 复制段落内容
 const copyPassage = (passage: Passage) => {
@@ -257,16 +369,6 @@ const toggleReferences = (passageIndex: number) => {
   passages.value[passageIndex].showReferences = !passages.value[passageIndex].showReferences
 }
 
-// 添加导出为 LaTeX 文档的函数
-// 修改导出相关的变量和函数
-const paperTitle = vueRef<string>('论文标题')
-const authorName = vueRef<string>('作者姓名')
-const templateType = vueRef<string>('article')
-const exportLoading = vueRef<boolean>(false)
-const pdfUrl = vueRef<string>('')
-const texContent = vueRef<string>('')
-const showExportDialog = vueRef<boolean>(false)
-const isGenerating = vueRef<boolean>(false) // 新增：控制生成状态
 
 // 添加导出JSON配置的函数
 const exportConfig = () => {
@@ -334,7 +436,7 @@ const importConfig = (event: Event) => {
       ElMessage.success('配置已导入')
       
       // 保存到本地存储
-      savePassagesToLocalStorage()
+      saveCurrentWritingState()
     } catch (error) {
       console.error('导入配置失败:', error)
       ElMessage.error('导入配置失败，请检查文件格式')
@@ -497,208 +599,238 @@ const downloadLatex = () => {
 </script>
 
 <template>
-  <div class="writing-container">
-    <!-- 添加导出和导入按钮 -->
-    <div class="top-actions">
-      <el-button type="primary" @click="addPassage">新建段落</el-button>
-      <el-button type="info" @click="exportConfig">导出配置</el-button>
-      <el-button type="warning" @click="triggerFileInput">导入配置</el-button>
-      <el-button type="success" @click="triggerPdfInput">上传至论文库...</el-button>
-      <input
-        type="file"
-        ref="fileInputRef"
-        style="display: none"
-        accept=".json"
-        @change="importConfig"
+  <el-container class="writing-container-layout">
+    <!-- 侧边栏 -->
+    <el-aside width="300px" class="history-aside">
+      <WritingHistory ref="writingHistoryRef"
+        @select-history="handleSelectHistory" 
+        @create-new="handleCreateNew" 
       />
-      <input
-        type="file"
-        ref="pdfInputRef"
-        style="display: none"
-        accept=".pdf"
-        @change="uploadPaperToDB"
-      />
-    </div>
-    
-    <div v-for="(passage, index) in passages" :key="index" class="passage-item">
-      <el-card class="passage-card">
-        <div class="passage-header">
-          <h3>段落{{ index + 1 }}</h3>
-          <el-button type="danger" size="small" @click="removePassage(index)">删除段落</el-button>
+    </el-aside>
+
+    <!-- 主内容区域 -->
+    <el-main class="writing-main">
+      <div class="writing-content">
+        <!-- 添加导出和导入按钮 -->
+        <div class="top-actions">
+          <el-button type="primary" @click="addPassage">新建段落</el-button>
+          <el-button type="info" @click="exportConfig">导出配置</el-button>
+          <el-button type="warning" @click="triggerFileInput">导入配置</el-button>
+          <el-button type="success" @click="triggerPdfInput">上传至论文库...</el-button>
+          <input
+            type="file"
+            ref="fileInputRef"
+            style="display: none"
+            accept=".json"
+            @change="importConfig"
+          />
+          <input
+            type="file"
+            ref="pdfInputRef"
+            style="display: none"
+            accept=".pdf"
+            @change="uploadPaperToDB"
+          />
         </div>
         
-        <el-form :model="passage" label-width="100px">
-          <el-form-item label="段落类型">
-            <el-input v-model="passage.passage_type" placeholder="请输入段落类型，如：引言、方法、结果等"></el-input>
-          </el-form-item>
-          
-          <el-form-item label="标签">
-            <div class="tags-container">
-              <el-tag
-                v-for="(tag, tagIndex) in passage.passage_tag"
-                :key="tagIndex"
-                closable
-                @close="removeTag(index, tagIndex)"
-                class="tag-item"
-              >
-                {{ tag }}
-              </el-tag>
-              
-              <el-input
-                v-if="passage.inputVisible"
-                ref="tagInputRef"
-                v-model="passage.inputValue"
-                class="tag-input"
-                size="small"
-                @keyup.enter="confirmTag(index)"
-                @blur="confirmTag(index)"
-              />
-              
-              <el-button v-else class="button-new-tag" size="small" @click="showTagInput(index)">
-                + 添加标签
-              </el-button>
+        <!-- 段落列表 -->
+        <div v-for="(passage, index) in passages" :key="index" class="passage-item">
+          <el-card class="passage-card">
+            <div class="passage-header">
+              <h3>段落{{ index + 1 }}</h3>
+              <el-button type="danger" size="small" @click="removePassage(index)">删除段落</el-button>
             </div>
-          </el-form-item>
-          
-          <el-form-item>
-            <el-button type="success" :loading="passage.loading" @click="generatePassage(index)">
-              {{ passage.isGenerated ? '重新生成' : '生成综述段落' }}
-            </el-button>
-          </el-form-item>
-          
-          <!-- 直接显示生成的段落内容 -->
-          <div v-if="passage.isGenerated" class="generated-content">
-            <h2>{{ passage.passage_title }}</h2>
             
-            <!-- 使用MarkdownPreview组件显示段落内容 -->
-            <MarkdownPreview :markdownContent="passage.passage" />
-            
-            <div v-if="passage.references && passage.references.length > 0" class="references">
-              <div class="references-header" @click="toggleReferences(index)">
-                <h3>参考文献 ({{ passage.references.length }})</h3>
-                <el-icon class="toggle-icon">
-                  <el-icon-arrow-down v-if="!passage.showReferences" />
-                  <el-icon-arrow-up v-else />
-                </el-icon>
+            <el-form :model="passage" label-width="100px">
+              <el-form-item label="段落类型">
+                <el-input v-model="passage.passage_type" placeholder="请输入段落类型，如：引言、方法、结果等"></el-input>
+              </el-form-item>
+              
+              <el-form-item label="标签">
+                <div class="tags-container">
+                  <el-tag
+                    v-for="(tag, tagIndex) in passage.passage_tag"
+                    :key="tagIndex"
+                    closable
+                    @close="removeTag(index, tagIndex)"
+                    class="tag-item"
+                  >
+                    {{ tag }}
+                  </el-tag>
+                  
+                  <el-input
+                    v-if="passage.inputVisible"
+                    ref="tagInputRef"
+                    v-model="passage.inputValue"
+                    class="tag-input"
+                    size="small"
+                    @keyup.enter="confirmTag(index)"
+                    @blur="confirmTag(index)"
+                  />
+                  
+                  <el-button v-else class="button-new-tag" size="small" @click="showTagInput(index)">
+                    + 添加标签
+                  </el-button>
+                </div>
+              </el-form-item>
+              
+              <el-form-item>
+                <el-button type="success" :loading="passage.loading" @click="generatePassage(index)">
+                  {{ passage.isGenerated ? '重新生成' : '生成综述段落' }}
+                </el-button>
+              </el-form-item>
+              
+              <!-- 直接显示生成的段落内容 -->
+              <div v-if="passage.isGenerated" class="generated-content">
+                <h2>{{ passage.passage_title }}</h2>
+                
+                <!-- 使用MarkdownPreview组件显示段落内容 -->
+                <MarkdownPreview v-model:markdownContent="passage.passage" />
+                
+                <div v-if="passage.references && passage.references.length > 0" class="references">
+                  <div class="references-header" @click="toggleReferences(index)">
+                    <h3>参考文献 ({{ passage.references.length }})</h3>
+                    <el-icon class="toggle-icon">
+                      <el-icon-arrow-down v-if="!passage.showReferences" />
+                      <el-icon-arrow-up v-else />
+                    </el-icon>
+                  </div>
+                  
+                  <transition name="fade">
+                    <ol v-if="passage.showReferences" class="references-list">
+                      <li v-for="(ref, refIndex) in passage.references" :key="refIndex">
+                        {{ ref }}
+                      </li>
+                    </ol>
+                  </transition>
+                </div>
+                
+                <div class="content-actions">
+                  <el-button type="primary" size="small" @click="copyPassage(passage)">
+                    复制内容
+                  </el-button>
+                </div>
               </div>
-              
-              <transition name="fade">
-                <ol v-if="passage.showReferences" class="references-list">
-                  <li v-for="(ref, refIndex) in passage.references" :key="refIndex">
-                    {{ ref }}
-                  </li>
-                </ol>
-              </transition>
-            </div>
-            
-            <div class="content-actions">
-              <el-button type="primary" size="small" @click="copyPassage(passage)">
-                复制内容
-              </el-button>
-            </div>
-          </div>
-        </el-form>
-      </el-card>
-    </div>
-    
-    <!-- 添加导出按钮 -->
-    <div class="action-buttons">
-      <el-button type="primary" @click="addPassage">新建段落</el-button>
-      <el-button 
-        type="success" 
-        @click="exportToLatex" 
-        :disabled="passages.length === 0">
-        导出为 LaTeX 文档
-      </el-button>
-    </div>
-    
-    <!-- 修改导出对话框 -->
-    <el-dialog
-      v-model="showExportDialog"
-      title="LaTeX 文档导出"
-      width="80%"
-    >
-      <!-- 表单部分 -->
-      <el-form label-width="100px">
-        <el-form-item label="论文标题">
-          <el-input v-model="paperTitle" :disabled="isGenerating || !!texContent" />
-        </el-form-item>
-        <el-form-item label="作者">
-          <el-input v-model="authorName" :disabled="isGenerating || !!texContent" />
-        </el-form-item>
-        <el-form-item label="模板类型">
-          <el-select v-model="templateType" style="width: 100%" :disabled="isGenerating || !!texContent">
-            <el-option label="文章 (article)" value="article" />
-            <el-option label="报告 (report)" value="report" />
-            <el-option label="书籍 (book)" value="book" />
-          </el-select>
-        </el-form-item>
-        
-        <!-- 生成按钮 -->
-        <el-form-item v-if="!texContent">
-          <el-button 
-            type="primary" 
-            @click="generateLatexDocument" 
-            :loading="isGenerating"
-            :disabled="isGenerating">
-            生成 LaTeX 文档
-          </el-button>
-        </el-form-item>
-        
-        <!-- 生成结果展示 -->
-        <div v-if="texContent || isGenerating">
-          <el-divider>生成结果</el-divider>
-          
-          <el-tabs v-if="texContent">
-            <el-tab-pane label="LaTeX 代码">
-              <el-input
-                type="textarea"
-                v-model="texContent"
-                :rows="15"
-                readonly
-              />
-            </el-tab-pane>
-            <el-tab-pane label="PDF 预览" v-if="pdfUrl">
-              <iframe :src="pdfUrl" style="width: 100%; height: 600px; border: none;"></iframe>
-            </el-tab-pane>
-          </el-tabs>
-          
-          <div v-else-if="isGenerating" class="generating-placeholder">
-            <el-skeleton :rows="10" animated />
-            <div class="generating-text">正在生成 LaTeX 文档，请稍候...</div>
-          </div>
+            </el-form>
+          </el-card>
         </div>
-      </el-form>
-      
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="showExportDialog = false">关闭</el-button>
-          <template v-if="texContent">
-            <el-button type="primary" @click="downloadLatex">
-              下载 LaTeX 文件
-            </el-button>
-            <el-button type="success" v-if="pdfUrl">
-              <a :href="pdfUrl" download :filename="`${paperTitle || '论文'}.pdf`" style="text-decoration: none; color: inherit;">
-                下载 PDF 文件
-              </a>
-            </el-button>
-            <el-button type="info" v-if="pdfUrl">
-              <a :href="pdfUrl" target="_blank" style="text-decoration: none; color: inherit;">
-                在新窗口查看 PDF
-              </a>
-            </el-button>
+        
+        <!-- 添加导出按钮 -->
+        <div class="action-buttons">
+          <el-button type="primary" @click="addPassage">新建段落</el-button>
+          <el-button 
+            type="success" 
+            @click="exportToLatex" 
+            :disabled="passages.length === 0">
+            导出为 LaTeX 文档
+          </el-button>
+        </div>
+        
+        <!-- 导出对话框 -->
+        <el-dialog
+          v-model="showExportDialog"
+          title="LaTeX 文档导出"
+          width="80%"
+        >
+          <!-- ... 对话框内部内容保持不变 ... -->
+          <el-form label-width="100px">
+            <el-form-item label="论文标题">
+              <el-input v-model="paperTitle" :disabled="isGenerating || !!texContent" />
+            </el-form-item>
+            <el-form-item label="作者">
+              <el-input v-model="authorName" :disabled="isGenerating || !!texContent" />
+            </el-form-item>
+            <el-form-item label="模板类型">
+              <el-select v-model="templateType" style="width: 100%" :disabled="isGenerating || !!texContent">
+                <el-option label="文章 (article)" value="article" />
+                <el-option label="报告 (report)" value="report" />
+                <el-option label="书籍 (book)" value="book" />
+              </el-select>
+            </el-form-item>
+            
+            <!-- 生成按钮 -->
+            <el-form-item v-if="!texContent">
+              <el-button 
+                type="primary" 
+                @click="generateLatexDocument" 
+                :loading="isGenerating"
+                :disabled="isGenerating">
+                生成 LaTeX 文档
+              </el-button>
+            </el-form-item>
+            
+            <!-- 生成结果展示 -->
+            <div v-if="texContent || isGenerating">
+              <el-divider>生成结果</el-divider>
+              
+              <el-tabs v-if="texContent">
+                <el-tab-pane label="LaTeX 代码">
+                  <el-input
+                    type="textarea"
+                    v-model="texContent"
+                    :rows="15"
+                    readonly
+                  />
+                </el-tab-pane>
+                <el-tab-pane label="PDF 预览" v-if="pdfUrl">
+                  <iframe :src="pdfUrl" style="width: 100%; height: 600px; border: none;"></iframe>
+                </el-tab-pane>
+              </el-tabs>
+              
+              <div v-else-if="isGenerating" class="generating-placeholder">
+                <el-skeleton :rows="10" animated />
+                <div class="generating-text">正在生成 LaTeX 文档，请稍候...</div>
+              </div>
+            </div>
+          </el-form>
+          
+          <template #footer>
+            <span class="dialog-footer">
+              <el-button @click="showExportDialog = false">关闭</el-button>
+              <template v-if="texContent">
+                <el-button type="primary" @click="downloadLatex">
+                  下载 LaTeX 文件
+                </el-button>
+                <el-button type="success" v-if="pdfUrl">
+                  <a :href="pdfUrl" :download="`${paperTitle || '论文'}.pdf`" style="text-decoration: none; color: inherit;">
+                    下载 PDF 文件
+                  </a>
+                </el-button>
+                <el-button type="info" v-if="pdfUrl">
+                  <a :href="pdfUrl" target="_blank" style="text-decoration: none; color: inherit;">
+                    在新窗口查看 PDF
+                  </a>
+                </el-button>
+              </template>
+            </span>
           </template>
-        </span>
-      </template>
-    </el-dialog>
-  </div>
+        </el-dialog>
+      </div>
+    </el-main>
+  </el-container>
 </template>
 
-
-
 <style scoped>
-.writing-container {
-  padding: 20px;
+/* 新增布局样式 */
+.writing-container-layout {
+  height: 100vh; /* 让容器占满整个视口高度 */
+}
+
+.history-aside {
+  border-right: 1px solid #ebeef5;
+  height: 100%; /* 侧边栏高度占满容器 */
+  display: flex; /* 使用 flex 布局 */
+  flex-direction: column; /* 垂直排列 */
+}
+
+.writing-main {
+  padding: 0; /* 移除 el-main 的默认内边距 */
+  height: 100%; /* 主区域高度占满容器 */
+  overflow-y: auto; /* 如果内容超出，允许主区域滚动 */
+}
+
+.writing-content {
+  padding: 20px; /* 将原来的内边距移到这里 */
 }
 
 /* 添加顶部操作按钮的样式 */
@@ -785,6 +917,22 @@ const downloadLatex = () => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* 导出对话框内的样式 */
+.generating-placeholder {
+  text-align: center;
+  padding: 20px;
+}
+.generating-text {
+  margin-top: 15px;
+  color: #606266;
+}
+
+.action-buttons {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
 }
 </style>
 
