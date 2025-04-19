@@ -37,7 +37,7 @@ const fetchHistories = async () => {
     
     if (response.data && Array.isArray(response.data)) {
       histories.value = response.data.map((item: any) => {
-        let title = '未命名写作'
+        let title = '新建综述'
         try {
           const data = JSON.parse(item.writing_data)
           if (data.paperTitle && data.paperTitle.trim()) {
@@ -94,7 +94,7 @@ const createNewHistory = async () => {
     return;
   }
   try {
-    const defaultWritingData = JSON.stringify({ paperTitle: '未命名写作' });
+    const defaultWritingData = JSON.stringify({ paperTitle: '新建写作' });
     const response = await axios.post('/users_api/create/writing/',
       { writing_data: defaultWritingData },
       {
@@ -233,9 +233,9 @@ const setActiveHistoryId = (id: number | null) => {
   currentHistoryId.value = id;
 }
 
-// 删除所有未命名写作分支
+// 删除所有新建写作分支
 const deleteAllUntitledHistories = async () => {
-  const untitled = histories.value.filter(h => h.title === '未命名写作');
+  const untitled = histories.value.filter(h => h.title === '新建写作');
   for (const history of untitled) {
     try {
       await axios.delete(`/users_api/delete/writing/${history.id}/`, {
@@ -245,7 +245,7 @@ const deleteAllUntitledHistories = async () => {
       });
     } catch (e) {
       // 可以选择静默处理
-      console.error('删除未命名写作失败:', e);
+      console.error('删除新建写作失败:', e);
     }
   }
   // 删除后刷新列表

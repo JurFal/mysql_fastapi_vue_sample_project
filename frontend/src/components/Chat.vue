@@ -363,6 +363,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
         autocomplete="off"
         :disabled="isTyping || !responseComplete"
         placeholder="请输入您的问题..."
+        @keydown="handleKeyDown"
       />
     </el-form-item>
 
