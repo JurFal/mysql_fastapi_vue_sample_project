@@ -1,0 +1,324 @@
+[
+    {
+        "id": 1,
+        "path": "papers/Synthesizing-SystemVerilog.pdf",
+        "title": "Synthesizing-SystemVerilog",
+        "topics": ["Verilog"]
+    },
+    {
+        "id": 2,
+        "path": "papers/BLIP-2.pdf",
+        "title": "BLIP-2",
+        "topics": ["CV", "NLP"]
+    },
+    {
+        "id": 3,
+        "path": "papers/The Case for Learned Index Structures.pdf",
+        "title": "The Case for Learned Index Structures",
+        "topics": ["DB"]
+    },
+    {
+        "id": 4,
+        "path": "papers/A Berkeley View on Serverless Computing.pdf",
+        "title": "A Berkeley View on Serverless Computing",
+        "topics": ["Distributed Computation"]
+    },
+    {
+        "id": 5,
+        "path": "papers/NIPS-2017-attention-is-all-you-need-Paper.pdf",
+        "title": "NIPS-2017-attention-is-all-you-need-Paper",
+        "topics": ["NLP"]
+    },
+    {
+        "id": 6,
+        "path": "papers/osdi16-abadi.pdf",
+        "title": "osdi16-abadi",
+        "topics": ["SYS"]
+    },
+    {
+        "id": 7,
+        "path": "papers/Sain_CLIP_for_All_Things_Zero-Shot_Sketch-Based_Image_Retrieval_Fine-Grained_or_CVPR_2023_paper.pdf",
+        "title": "Sain_CLIP_for_All_Things_Zero-Shot_Sketch-Based_Image_Retrieval_Fine-Grained_or_CVPR_2023_paper",
+        "topics": [
+            "CV"
+        ]
+    },
+    {
+        "id": 8,
+        "path": "papers/Jumping_NLP_Curves_A_Review_of_Natural_Language_Processing_Research_Review_Article.pdf",
+        "title": "Jumping_NLP_Curves_A_Review_of_Natural_Language_Processing_Research_Review_Article",
+        "topics": [
+            "NLP"
+        ]
+    },
+    {
+        "id": 9,
+        "path": "papers/Learning to Optimize Join Queries With Deep Reinforcement Learning.pdf",
+        "title": "Learning to Optimize Join Queries With Deep Reinforcement Learning",
+        "topics": ["DB"]
+    },
+    {
+        "id": 10,
+        "path": "papers/Sketch-Based_Image_Retrieval_Benchmark_and_Bag-of-Features_Descriptors.pdf",
+        "title": "Sketch-Based_Image_Retrieval_Benchmark_and_Bag-of-Features_Descriptors",
+        "topics": ["CV"]
+    },
+    {
+        "id": 11,
+        "path": "papers/Metaverse Perspectives from graphics interactions and visualization.pdf",
+        "title": "Metaverse Perspectives from graphics interactions and visualization",
+        "topics": ["Metaverse"]
+    },
+    {
+        "id": 12,
+        "path": "papers/Learning Transferable Visual Models From Natural Language Supervision.pdf",
+        "title": "Learning Transferable Visual Models From Natural Language Supervision",
+        "topics": ["NLP"]
+    },
+    {
+        "id": 13,
+        "path": "papers/Rethinking Learned Cost Models Why Start from Scratch?.pdf",
+        "title": "Rethinking Learned Cost Models Why Start from Scratch?",
+        "topics": ["DB"]
+    },
+    {
+        "id": 14,
+        "path": "papers/OptiQL Robust Optimistic Locking for Memory-Optimized Indexes.pdf",
+        "title": "OptiQL Robust Optimistic Locking for Memory-Optimized Indexes",
+        "topics": ["DB", "SYS"]
+    },
+    {
+        "id": 15,
+        "path": "papers/Sparse_Representation_for_Computer_Vision_and_Pattern_Recognition.pdf",
+        "title": "Sparse_Representation_for_Computer_Vision_and_Pattern_Recognition",
+        "topics": ["CV"]
+    },
+    {
+        "id": 16,
+        "path": "papers/Levenson-RomeoJulietShakespeare-1984.pdf",
+        "title": "Levenson-RomeoJulietShakespeare-1984",
+        "topics": ["Other"]
+    },
+    {
+        "id": 17,
+        "path": "papers/Spectre_Attacks_Exploiting_Speculative_Execution.pdf",
+        "title": "Spectre_Attacks_Exploiting_Speculative_Execution",
+        "topics": ["Security"]
+    },
+    {
+        "id": 18,
+        "path": "papers/NeurIPS-2023-visual-instruction-tuning-Paper-Conference.pdf",
+        "title": "NeurIPS-2023-visual-instruction-tuning-Paper-Conference",
+        "topics": ["CV"]
+    },
+    {
+        "id": 19,
+        "path": "papers/Sparks of Artificial General Intelligence Early Experiments with GPT-4.pdf",
+        "title": "Sparks of Artificial General Intelligence Early Experiments with GPT-4",
+        "topics": [
+            "NLP"
+        ]
+    },
+    {
+        "id": 20,
+        "path": "papers/Filtered Channel Features for Pedestrian Detection.pdf",
+        "title": "Filtered Channel Features for Pedestrian Detection",
+        "topics": ["CV"]
+    },
+    {
+        "id": 21,
+        "path": "papers/The_Art_Science_and_Engineering_of_Fuzzing_A_Survey.pdf",
+        "title": "The_Art_Science_and_Engineering_of_Fuzzing_A_Survey",
+        "topics": ["Security"]
+    },
+    {
+        "id": 22,
+        "path": "papers/MPCT_Multiscale_Point_Cloud_Transformer_With_a_Residual_Network.pdf",
+        "title": "MPCT_Multiscale_Point_Cloud_Transformer_With_a_Residual_Network",
+        "topics": [
+            "CV"
+        ]
+    },
+    {
+        "id": 23,
+        "path": "papers/PD-Explain A Unified Python-native Framework for Query Explanations Over DataFrames.pdf",
+        "title": "PD-Explain A Unified Python-native Framework for Query Explanations Over DataFrames",
+        "topics": ["DB"]
+    },
+    {
+        "id": 24,
+        "path": "papers/s10462-024-10756-9.pdf",
+        "title": "s10462-024-10756-9",
+        "topics": ["Distributed Computation"]
+    },
+    {
+        "id": 25,
+        "path": "papers/Kirillov_Segment_Anything_ICCV_2023_paper.pdf",
+        "title": "Kirillov_Segment_Anything_ICCV_2023_paper",
+        "topics": [
+            "CV"
+        ]
+    },
+    {
+        "id": 26,
+        "path": "papers/978-3-319-40667-1.pdf",
+        "title": "978-3-319-40667-1",
+        "topics": ["Security"]
+    },
+    {
+        "id": 27,
+        "path": "papers/Robust Join Processing with Diamond Hardened Joins.pdf",
+        "title": "Robust Join Processing with Diamond Hardened Joins",
+        "topics": ["DB"]
+    },
+    {
+        "id": 28,
+        "path": "papers/Liu_Deep_Sketch_Hashing_CVPR_2017_paper.pdf",
+        "title": "Liu_Deep_Sketch_Hashing_CVPR_2017_paper",
+        "topics": [
+            "CV"
+        ]
+    },
+    {
+        "id": 29,
+        "path": "papers/Sain_StyleMeUp_Towards_Style-Agnostic_Sketch-Based_Image_Retrieval_CVPR_2021_paper.pdf",
+        "title": "Sain_StyleMeUp_Towards_Style-Agnostic_Sketch-Based_Image_Retrieval_CVPR_2021_paper",
+        "topics": [
+            "CV"
+        ]
+    },
+    {
+        "id": 30,
+        "path": "papers/Inductive Attributed Community Search to Learn Communities across Graphs.pdf",
+        "title": "Inductive Attributed Community Search to Learn Communities across Graphs",
+        "topics": [
+            "DB"
+        ]
+    },
+    {
+        "id": 31,
+        "path": "papers/AirIndex Versatile Index Tuning Through Data and Storag.pdf",
+        "title": "AirIndex Versatile Index Tuning Through Data and Storag",
+        "topics": ["DB"]
+    },
+    {
+        "id": 32,
+        "path": "papers/LLaMA 2 Open Foundation and Fine-Tuned Chat Models.pdf",
+        "title": "LLaMA 2 Open Foundation and Fine-Tuned Chat Models",
+        "topics": ["NLP"]
+    },
+    {
+        "id": 33,
+        "path": "papers/LeanStore A High-Performance Storage Engine for NVMe SSDs.pdf",
+        "title": "LeanStore A High-Performance Storage Engine for NVMe SSDs",
+        "topics": ["DB"]
+    },
+    {
+        "id": 34,
+        "path": "papers/GPT-4 Technical Report.pdf",
+        "title": "GPT-4 Technical Report",
+        "topics": [
+            "NLP"
+        ]
+    },
+    {
+        "id": 35,
+        "path": "papers/TextAttack A Framework for Adversarial Attacks, Data Augmentation, and Adversarial Training in NLP.pdf",
+        "title": "TextAttack A Framework for Adversarial Attacks, Data Augmentation, and Adversarial Training in NLP",
+        "topics": [
+            "NLP"
+        ]
+    },
+    {
+        "id": 36,
+        "path": "papers/LLaMA Open and Efficient Foundation Language Models.pdf",
+        "title": "LLaMA Open and Efficient Foundation Language Models",
+        "topics": ["NLP"]
+    },
+    {
+        "id": 37,
+        "path": "papers/Concurrency and Computation - 2017 - Xu - A survey on load balancing algorithms for virtual machines placement in cloud.pdf",
+        "title": "Concurrency and Computation - 2017 - Xu - A survey on load balancing algorithms for virtual machines placement in cloud",
+        "topics": ["Distributed Computation"]
+    },
+    {
+        "id": 38,
+        "path": "papers/Certified_Robustness_to_Adversarial_Examples_with_Differential_Privacy.pdf",
+        "title": "Certified_Robustness_to_Adversarial_Examples_with_Differential_Privacy",
+        "topics": ["Security"]
+    },
+    {
+        "id": 39,
+        "path": "papers/SoK_Security_and_Privacy_in_Machine_Learning.pdf",
+        "title": "SoK_Security_and_Privacy_in_Machine_Learning",
+        "topics": ["Security"]
+    },
+    {
+        "id": 40,
+        "path": "papers/Memory-Efficient and Flexible Detection of Heavy Hitters in High-Speed Networks.pdf",
+        "title": "Memory-Efficient and Flexible Detection of Heavy Hitters in High-Speed Networks",
+        "topics": ["Security"]
+    },
+    {
+        "id": 41,
+        "path": "papers/scotchmer-2012-standing-on-the-shoulders-of-giants-cumulative-research-and-the-patent-law.pdf",
+        "title": "scotchmer-2012-standing-on-the-shoulders-of-giants-cumulative-research-and-the-patent-law",
+        "topics": ["Other"]
+    },
+    {
+        "id": 42,
+        "path": "papers/Zhang_Adding_Conditional_Control_to_Text-to-Image_Diffusion_Models_ICCV_2023_paper.pdf",
+        "title": "Zhang_Adding_Conditional_Control_to_Text-to-Image_Diffusion_Models_ICCV_2023_paper",
+        "topics": [
+            "CV"
+        ]
+    },
+    {
+        "id": 43,
+        "path": "papers/Vector Databases What’s Really New and What’s Next?.pdf",
+        "title": "Vector Databases What’s Really New and What’s Next?",
+        "topics": ["DB"]
+    },
+    {
+        "id": 44,
+        "path": "papers/Meltdown.pdf",
+        "title": "Meltdown",
+        "topics": ["Security"]
+    },
+    {
+        "id": 45,
+        "path": "papers/Deep Speech Scaling up End-to-End Speech Recognition.pdf",
+        "title": "Deep Speech Scaling up End-to-End Speech Recognition",
+        "topics": ["NLP"]
+    },
+    {
+        "id": 46,
+        "path": "papers/HongTu Scalable Full-Graph GNN Training on Multiple GPUs.pdf",
+        "title": "HongTu Scalable Full-Graph GNN Training on Multiple GPUs",
+        "topics": ["DB"]
+    },
+    {
+        "id": 47,
+        "path": "papers/DDoS_in_the_IoT_Mirai_and_Other_Botnets.pdf",
+        "title": "DDoS_in_the_IoT_Mirai_and_Other_Botnets",
+        "topics": ["Security"]
+    },
+    {
+        "id": 48,
+        "path": "papers/24595_A_Survey_of_Large_Langua.pdf",
+        "title": "24595_A_Survey_of_Large_Langua",
+        "topics": ["NLP"]
+    },
+    {
+        "id": 49,
+        "path": "papers/NOCAP Near-Optimal Correlation-Aware Partitioning Joins.pdf",
+        "title": "NOCAP Near-Optimal Correlation-Aware Partitioning Joins",
+        "topics": ["DB"]
+    },
+    {
+        "id": 50,
+        "path": "papers/Two Birds With One Stone.pdf",
+        "title": "Two Birds With One Stone",
+        "topics": ["DB"]
+    }
+]

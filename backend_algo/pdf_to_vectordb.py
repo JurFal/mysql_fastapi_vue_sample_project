@@ -4,6 +4,9 @@ import chromadb
 import chromadb.utils.embedding_functions as embedding_functions
 from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+import fitz  # 新增
+import requests  # 新增
+import base64  # 新增
 
 # 配置OpenAI embedding函数
 openai_ef = embedding_functions.OpenAIEmbeddingFunction(
@@ -24,20 +27,51 @@ except:
     collection = client.create_collection(name=collection_name, embedding_function=openai_ef)
     print(f"创建新的collection: {collection_name}")
 
-def extract_text_from_pdf(pdf_path):
-    """从PDF文件中提取文本"""
-    reader = PdfReader(pdf_path)
-    text = ""
-    for page in reader.pages:
-        try:
-            page_text = page.extract_text()
-            # 清理文本中的无效Unicode字符
-            page_text = page_text.encode('utf-8', errors='ignore').decode('utf-8')
-            text += page_text + "\n"
-        except Exception as e:
-            print(f"处理页面时出错: {e}")
-            continue
-    return text
+def extract_text_and_formula_from_pdf(pdf_path):
+    """从PDF文件中提取文本和公式（公式图片用Mathpix识别为LaTeX）"""
+    doc = fitz.open(pdf_path)
+    content_blocks = []
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        blocks = page.get_text("blocks")
+        for b in blocks:
+            block_type = b[6] if len(b) > 6 else 0
+            if block_type == 0:  # 文本块
+                text = b[4].strip()
+                if text:
+                    content_blocks.append(text)
+            elif block_type == 1:  # 图片块，可能为公式
+                img = page.get_pixmap(clip=fitz.Rect(b[:4]))
+                img_bytes = img.tobytes("png")
+                latex = mathpix_ocr_formula(img_bytes)
+                if latex:
+                    content_blocks.append(f"[公式]{latex}")
+    return "\n".join(content_blocks)
+
+# Mathpix OCR API调用
+MATHPIX_APP_ID = os.getenv("MATHPIX_APP_ID", "your_app_id")
+MATHPIX_APP_KEY = os.getenv("MATHPIX_APP_KEY", "your_app_key")
+def mathpix_ocr_formula(img_bytes):
+    url = "https://api.mathpix.com/v3/latex"
+    img_b64 = base64.b64encode(img_bytes).decode()
+    headers = {
+        "app_id": MATHPIX_APP_ID,
+        "app_key": MATHPIX_APP_KEY,
+        "Content-type": "application/json"
+    }
+    data = {
+        "src": f"data:image/png;base64,{img_b64}",
+        "ocr": ["math", "text"],
+        "formats": ["latex_styled"]
+    }
+    try:
+        resp = requests.post(url, headers=headers, json=data, timeout=10)
+        if resp.status_code == 200:
+            result = resp.json()
+            return result.get("latex_styled")
+    except Exception as e:
+        print(f"Mathpix识别出错: {e}")
+    return None
 
 def add_pdf_to_vectordb(pdf_path):
     """将PDF文件添加到向量数据库"""
@@ -46,7 +80,7 @@ def add_pdf_to_vectordb(pdf_path):
     
     try:
         # 提取文本
-        text = extract_text_from_pdf(pdf_path)
+        text = extract_text_and_formula_from_pdf(pdf_path)
         
         # 分割文本
         chunks = split_text(text)
@@ -66,7 +100,7 @@ def add_pdf_to_vectordb(pdf_path):
     except Exception as e:
         print(f"处理文件 {filename} 时出错: {e}")
 
-def split_text(text, chunk_size=1000, chunk_overlap=200):
+def split_text(text, chunk_size=200, chunk_overlap=50):
     """将文本分割成适当大小的块"""
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,

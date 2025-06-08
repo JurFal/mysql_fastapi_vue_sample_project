@@ -1,0 +1,204 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage{ctex}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cite}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% 页面设置
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+
+% 代码样式设置
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    showstringspaces=false,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray}
+}
+
+% 超链接设置
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\begin{document}
+
+% 封面
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\Huge\bfseries 论文写作助手算法方案文档}
+    
+    \vspace{1.5cm}
+    
+    \vspace{3cm}
+    
+    \begin{tabular}{ll}
+        \textbf{姓名：} & [周弈成] \\
+        \textbf{学号：} & [23307130064] \\
+        \textbf{专业：} & [计算机科学与技术] \\
+        \textbf{学院：} & [计算与智能创新学院] \\
+    \end{tabular}
+    
+    \vfill
+    
+    {\large \today}
+\end{titlepage}
+
+% 目录
+\tableofcontents
+\newpage
+
+% 正文开始
+\section{算法后端实现方法}
+\subsection{总述}
+算法后端分为三部分：加载参考论文到向量数据库；根据段落类型和关键词描述，在向量数据库中查找相关文本并写作综述段落；整合生成的段落，生成LaTeX和pdf格式的全文。
+
+\subsection{加载参考论文}
+
+本系统通过\texttt{pdf\_to\_vectordb.py}脚本实现PDF文档的智能处理和向量化存储，主要包含以下核心功能：
+
+\subsubsection{PDF文本和公式提取}
+系统采用PyMuPDF（fitz）库对PDF文档进行解析，能够同时处理文本内容和数学公式：
+\begin{itemize}
+    \item \textbf{文本提取：}直接提取PDF中的文本块内容
+    \item \textbf{公式识别：}通过Mathpix OCR API将公式图像转换为LaTeX格式，以\texttt{[公式]\{latex\_code\}}的形式存储
+    \item \textbf{内容整合：}将文本和公式内容合并为完整的文档表示
+\end{itemize}
+
+\subsubsection{文本分块处理}
+为了优化检索效果和向量化质量，系统对提取的文本进行智能分块：
+\begin{itemize}
+    \item \textbf{块大小限制：}每个文本块限制最大字符数量
+    \item \textbf{重叠设计：}相邻文本块有重叠字符，保持上下文连续性
+    \item \textbf{分割策略：}使用RecursiveCharacterTextSplitter实现递归文本分割
+\end{itemize}
+
+\subsubsection{向量化和存储}
+系统使用先进的embedding技术将文本转换为向量表示：
+\begin{itemize}
+    \item \textbf{Embedding模型：}采用BGE-M3模型进行文本向量化，支持多语言和长文本处理
+    \item \textbf{语义表示：}向量能够捕捉文本的深层语义信息，相似内容在向量空间中距离较近
+    \item \textbf{向量数据库：}使用ChromaDB存储向量化后的文档，支持高效的相似度检索
+\end{itemize}
+
+该实现确保了学术论文中的文本内容和数学公式都能被准确识别、向量化并用于后续的语义检索任务。
+
+\subsection{段落写作}
+系统根据规则提示词，进行段落写作：
+\begin{itemize}
+    \item \textbf{字数限制：}限制段落字数，使段落内容精简
+    \item \textbf{向量数据库：}使用ChromaDB存储向量化后的文档，支持高效的相似度检索
+\end{itemize}
+
+
+\section{算法后端优化方法}
+\subsection{总述}
+0.5实验实现算法后端后，1.0实验中在多个部分进行优化：二次请求；优化向量数据库分块参数；应用重排序。
+
+\subsection{二次请求}
+
+在生成文本后，再次把模型生成的文本和原本的规则提示词发送至模型，重新生成文本。
+
+\subsubsection{优化向量数据库分块参数}
+系统对提取的文本进行智能分块时的块大小参数和重叠参数需要调整。实验中，对比“块大小1000字，重叠200字”和“块大小200字，重叠50字”两种参数。
+
+\subsubsection{应用重排序}
+通过向量数据库检索到的文本可能相关性不足。我们通过重排序，优化检索文本的精确度。为此，需要提升检索文本数量再进行重排序取前几个。
+
+\section{实验}
+
+\subsection{实验环境}
+硬件：Macbook Pro， Apple M4芯片，16GB内存。
+
+\begin{itemize}
+    \item \textbf{操作系统：} [MacOS]
+    \item \textbf{编程语言：} [python]
+\end{itemize}
+
+\subsection{数据集}
+论文库数据集：收集5种计算机领域的热门论文（50篇）及无关错误论文（2篇）。按照领域分类。
+
+问答数据集：包含50篇各计算机领域论文大纲问答和2篇无关问答。数据集的问题字段和参考数据集的答案字段由Claude 4 Sonnet生成，参考文献字段按照论文库领域分类给出。
+
+\subsection{实验设计}
+
+评估标准：
+BLEU和Rouge作为答案字段的文本翻译指标；
+Precision@K, Recall@K, F1@K为参考文献指标（K取1、3、5、8，最后用K=3）。
+此外，额外设计Top-K 包含率（Coverage）指标：若一个问答的前K个参考文献全包含在参考文献中，则为1，否则为0。
+统计多个 query 下的平均 InclusionRate 来衡量整体性能。
+
+先使用问题直接连接向量数据库后根据提示词直接接入大模型润色的答案作为对照，
+再把问题接入算法层后端，依次测试无优化、二次请求优化及向量化参数与重排序优化三个优化方法。
+
+\subsection{实验过程}
+\begin{enumerate}
+    \item 使用start.sh启动前后端，加载参考论文到向量数据库
+    \item 使用generate\_qa\_content.py脚本，调用模型，根据问答数据集问题生成文本和参考文献
+    \item 使用evaluate\_translation.py脚本，评估生成文本的翻译质量
+    \item 使用evaluate\_r\_script.py脚本，评估引用文献的匹配质量
+\end{enumerate}
+
+\subsection{实验结果}
+
+\begin{table}[H]
+\centering
+\caption{文本对比实验结果}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+算法 & BLEU-1 & BLEU-4 & ROUGE-1 F1 & ROUGE-L F1 \\
+\midrule
+对照 & 0.2137 & 0.0180 & 0.0423 & 0.0384 \\
+无优化 & 0.2713 & 0.0233 & 0.0688 & 0.0677 \\
+二次请求优化 & 0.2742 & 0.0227 & 0.0562 & 0.0529 \\
+向量化参数与重排序优化 & 0.2828 & 0.0260 & 0.0630 & 0.0619 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{引用对比实验结果}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+算法 & Precision@3 & Recall@3 & F1@3 & InclusionRate@3 \\
+\midrule
+对照 & 0.6410 & 0.2289 & 0.3213 & 0.3654 \\
+无优化 & 0.6090 & 0.2205 & 0.3082 & 0.3269 \\
+二次请求优化 & 0.6026 & 0.2188 & 0.3055 & 0.3269 \\
+向量化参数与重排序优化 & 0.5705 & 0.1983 & 0.2821 & 0.2115 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\subsection{结果分析}
+我们可以发现，算法后端的三个优化对文本生成质量的优化启正面作用，但是对引用的匹配度存在负面作用。
+有可能是因为引用文献的参考值设置过于死板遵循分类，而忽略每篇题材论文的独特性，有优化的空间。
+
+\section{结论}
+
+本实验中，我们通过优化算法后端的三个部分，提高了文本生成质量，但是对引用匹配起到了反效果。
+这启示我们在设计算法后端时，需要考虑到每篇论文的独特性，而不是简单地遵循分类。
+以及，数据库的设计还有进一步的优化空间。
+
+\end{document}

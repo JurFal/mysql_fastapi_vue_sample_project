@@ -29,13 +29,13 @@ openai_ef = embedding_functions.OpenAIEmbeddingFunction(
 
 app = FastAPI()
 
-
 URL = 'http://10.176.64.152:11434/v1'
 MODEL = 'qwen2.5:7b'
 
+chroma_client = chromadb.HttpClient(host='localhost', port=8002)
 
-# 在app = FastAPI()之后添加以下代码
-app = FastAPI()
+# 创建全局session用于HTTP连接复用
+http_session = requests.Session()
 
 # 创建静态文件目录（如果不存在）
 os.makedirs("static/output", exist_ok=True)
@@ -107,7 +107,7 @@ async def clear_vectordb():
 async def chat_stream(conversation: schemas.Conversation):
 
     def generator():
-        with requests.post(f'{URL}/chat/completions', json={
+        with http_session.post(f'{URL}/chat/completions', json={
             'model': MODEL,
             'stream': True,
             'messages': [m.model_dump() for m in conversation.messages],
@@ -132,7 +132,7 @@ async def chat_stream(conversation: schemas.Conversation):
 
 @app.post("/chat/", response_model=schemas.ConversationResponse)
 async def chat(conversation: schemas.Conversation):
-    resp = requests.post(f'{URL}/chat/completions', json={
+    resp = http_session.post(f'{URL}/chat/completions', json={
         'model': MODEL,
         'stream': False,
         'messages': [m.model_dump() for m in conversation.messages],
@@ -147,7 +147,7 @@ async def chat(conversation: schemas.Conversation):
 async def writing(passage_idea: schemas.PassageIdea):
     
     def generator(conversation):
-        with requests.post(f'{URL}/chat/completions', json={
+        with http_session.post(f'{URL}/chat/completions', json={
             'model': MODEL,
             'stream': True,
             'messages': [m.model_dump() for m in conversation.messages],
@@ -168,97 +168,114 @@ async def writing(passage_idea: schemas.PassageIdea):
                 yield raw_line + b'\n'
 
     # 1. 从向量数据库中查找相关文本
-    embeddings = openai_ef  # 使用适合您项目的嵌入模型
 
     # 使用 chromadb 客户端连接到向量数据库
-    client = chromadb.HttpClient(host='localhost', port=8002)
-    collection = client.get_collection("papers_collection")
+    collection = chroma_client.get_collection("papers_collection")
     # 移除这一行，它可能导致问题
     collection._embedding_function = openai_ef
     
     # 使用 passage_tag 作为查询关键词
     query = " ".join(passage_idea.passage_tag)
     
-    # 简化查询，不设置额外参数
+    # 简化查询，不设置额外参数，获取更多候选结果用于重排序
     results = collection.query(
         query_texts=[query],
-        n_results=10
+        n_results=20  # 增加候选数量用于重排序
     )
     
-    # 提取文本内容
-    passage_sentences = results.get("documents", [[]])[0]
+    # 提取文本内容和元数据
+    documents = results.get("documents", [[]])[0]
     metadata = results.get("metadatas", [[]])[0]
-    references = [f"Reference {i+1}: {meta.get('source', 'Unknown')}" for i, meta in enumerate(metadata)]
     
-    # 2. 构建提示词
-    prompt = f"请根据关键词：{', '.join(passage_idea.passage_tag)}，以markdown格式写作文献综述中的'{passage_idea.passage_type}'段落。\n\n以下是文献综述参考文本内容："
+    # 2. 使用重排序API优化结果
+    if documents:  # 确保有文档可以重排序
+        try:
+            rerank_response = http_session.post("http://10.176.64.152:11436/v1/rerank", json={
+                "model": "bge-reranker-v2-m3",
+                "query": query,
+                "documents": documents,
+                "top_n": 10  # 重排序后取前10个最相关的结果
+            }, timeout=30)
+            
+            if rerank_response.status_code == 200:
+                rerank_data = rerank_response.json()
+                # 根据重排序结果重新排列文档和元数据
+                reranked_indices = [item["index"] for item in rerank_data.get("results", [])]
+                passage_sentences = [documents[i] for i in reranked_indices]
+                reranked_metadata = [metadata[i] for i in reranked_indices]
+                references = [f"Reference {i+1}: {meta.get('source', 'Unknown')}" for i, meta in enumerate(reranked_metadata)]
+            else:
+                # 重排序失败时使用原始结果
+                passage_sentences = documents[:10]
+                references = [f"Reference {i+1}: {meta.get('source', 'Unknown')}" for i, meta in enumerate(metadata[:10])]
+        except Exception as e:
+            # 重排序出错时使用原始结果
+            print(f"Reranking failed: {e}")
+            passage_sentences = documents[:10]
+            references = [f"Reference {i+1}: {meta.get('source', 'Unknown')}" for i, meta in enumerate(metadata[:10])]
+    else:
+        passage_sentences = []
+        references = []
+    
+    # 3. 构建合并后的提示词
+    prompt = f"""请根据关键词：{', '.join(passage_idea.passage_tag)}，以markdown格式写作文献综述中的'{passage_idea.passage_type}'段落。
+
+要求：
+1. 使用简体中文markdown格式
+2. 仅生成一个段落
+3. 确保有明确的标题（使用markdown的#格式）
+4. 标题应该简洁明了地概括内容
+5. 内容中应没有参考文献相关内容和引用标记
+6. 内容须符合段落主题：{passage_idea.passage_type}
+7. 严格控制字数在100-400字之间，超出或不足都不符合要求
+8. 直接输出最终格式化的内容，无需额外说明
+
+以下是文献综述参考文本内容："""
+    
     for i, sentence in enumerate(passage_sentences):
-        prompt += f"文本{i+1}: {sentence}\n"
+        prompt += f"\n文本{i+1}: {sentence}"
     
-    # 3. 发送到本地 /chat 接口
+    # 4. 发送到本地 /chat 接口（合并为一次请求）
     conversation = schemas.Conversation(
         messages=[
-            schemas.Message(role="system", content="你是一个专业的学术论文写作助手，擅长根据参考文献生成高质量的论文段落。"),
+            schemas.Message(role="system", content="你是一个专业的学术论文写作助手，擅长根据参考文献生成高质量的论文段落。请严格按照用户要求的格式和字数限制输出内容。"),
             schemas.Message(role="user", content=prompt)
         ]
     )
     
-    # 使用流式接口并收集完整响应
-    full_response = ""
-    with requests.post(f'{URL}/chat/completions', json={
-        'model': MODEL,
-        'stream': True,
-        'messages': [m.model_dump() for m in conversation.messages],
-    }, stream=True, timeout=60) as resp:
-        for line in resp.iter_lines():
-            if not line:
-                continue
-            line = line.decode('utf-8')
-            if line.startswith('data: '):
-                line = line[len('data: '):]
-                if line == '[DONE]':
-                    break
-                try:
-                    data = json.loads(line)
-                    content = data.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                    if content:
-                        full_response += content
-                except json.JSONDecodeError:
-                    continue
-    
-    ai_response_initial = full_response
-    
-    # 3.5 将AI输出的内容再次发送给AI进行改进和格式化
-    improvement_prompt = f"""请根据以下内容，按照要求进行改进和格式化：
-        1. 使用简体中文markdown格式
-        2. 仅生成一个段落
-        3. 确保有明确的标题（使用markdown的#格式）
-        4. 标题应该简洁明了地概括内容
-        5. 内容应该保持学术性和专业性
-        6. 内容须符合段落主题：{passage_idea.passage_type}
-
-        原始内容：
-        {ai_response_initial}
-        """
-    
-    improvement_conversation = schemas.Conversation(
-        messages=[
-            schemas.Message(role="system", content="你是一个专业的学术论文写作助手，擅长格式化和改进学术文本。"),
-            schemas.Message(role="user", content=improvement_prompt)
-        ]
-    )
-    
-    # 获取改进后的响应
-    resp = requests.post(f'{URL}/chat/completions', json={
+    # 使用非流式接口获取响应
+    resp = http_session.post(f'{URL}/chat/completions', json={
         'model': MODEL,
         'stream': False,
-        'messages': [m.model_dump() for m in improvement_conversation.messages],
-    }, stream=False, timeout=60)
+        'messages': [m.model_dump() for m in conversation.messages],
+    }, timeout=60)
     
     response_data = resp.json()
     ai_response = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
     
-    # 4. 解析AI响应，提取标题和段落
+    # 5. 第二次请求：用相同提示词再次格式化第一次生成的段落
+    prompt += f"\n第一次生成结果如下，请继续规范\n" + ai_response
+    second_conversation = schemas.Conversation(
+        messages=[
+            schemas.Message(role="system", content="你是一个专业的学术论文写作助手，擅长根据参考文献生成高质量的论文段落。请严格按照用户要求的格式和字数限制输出内容。"),
+            schemas.Message(role="user", content=prompt)
+        ]
+    )
+    
+    # 发送第二次请求
+    second_resp = http_session.post(f'{URL}/chat/completions', json={
+        'model': MODEL,
+        'stream': False,
+        'messages': [m.model_dump() for m in second_conversation.messages],
+    }, timeout=60)
+    
+    second_response_data = second_resp.json()
+    final_ai_response = second_response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    
+    # 使用第二次请求的结果作为最终响应
+    ai_response = final_ai_response if final_ai_response else ai_response
+    
+    # 6. 解析AI响应，提取标题和段落
     # 现在假设AI返回的格式是"# 标题\n\n正文"（markdown格式）
     try:
         lines = ai_response.split("\n")
@@ -329,7 +346,7 @@ async def generate_latex_output(request: schemas.LatexOutputRequest):
         ]
     )
     
-    resp = requests.post(f'{URL}/chat/completions', json={
+    resp = http_session.post(f'{URL}/chat/completions', json={
         'model': MODEL,
         'stream': False,
         'messages': [m.model_dump() for m in conversation.messages],
